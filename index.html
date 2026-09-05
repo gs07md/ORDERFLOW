@@ -6,21 +6,23 @@
 <title>OrderFlow — Shree Giriraj Auto Parts</title>
 <style>
   :root{
-    --bg: #F6F7F9;
+    --bg: #F0F2F6;
     --bg-panel: #FFFFFF;
     --bg-raised: #F2F4F7;
-    --line: #E3E6EA;
-    --text: #16181D;
+    --line: #E1E4EA;
+    --text: #14161B;
     --text-dim: #6B7280;
+    --navy: #101A33;
+    --navy-2: #1B2A4E;
     --accent: #2F5FDE;
     --accent-dim: #E8EEFD;
-    --ok: #1E8E5A;
-    --ok-bg: #E6F4EA;
+    --ok: #12946A;
+    --ok-bg: #E4F6EF;
     --bad: #D6433D;
     --bad-bg: #FCEAEA;
-    --wait-bg: #FDF3DA;
-    --wait: #B07C13;
-    --radius: 10px;
+    --wait-bg: #FEF0D8;
+    --wait: #B4720F;
+    --radius: 12px;
     --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
@@ -30,45 +32,50 @@
   h1,h2,h3{ margin:0; font-weight:600; }
   .app-header{
     position:sticky; top:0; z-index:20;
-    background:var(--bg); border-bottom:1px solid var(--line);
-    padding:14px 16px 12px;
+    background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+    padding:16px 16px 14px;
+    box-shadow:0 2px 10px rgba(16,26,51,.18);
   }
   .brand{ display:flex; align-items:center; gap:10px; }
-  .brand .mark{ width:32px; height:32px; border-radius:8px; background:var(--accent); display:flex; align-items:center; justify-content:center; font-weight:700; color:#FFFFFF; font-size:15px; flex:none; }
-  .brand-name{ font-size:15px; font-weight:600; letter-spacing:.2px; }
-  .brand-sub{ font-size:11.5px; color:var(--text-dim); margin-top:1px; }
+  .brand .mark{ width:34px; height:34px; border-radius:9px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-weight:700; color:#FFFFFF; font-size:15px; flex:none; border:1px solid rgba(255,255,255,.18); }
+  .brand-name{ font-size:15.5px; font-weight:600; letter-spacing:.2px; color:#FFFFFF; }
+  .brand-sub{ font-size:11.5px; color:rgba(255,255,255,.62); margin-top:1px; }
 
   main{ padding:14px 16px 8px; max-width:640px; margin:0 auto; }
 
   /* ---- Order list ---- */
   .order-card{
-    background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+    background:var(--bg-panel); border:1px solid var(--line); border-left:3px solid var(--line); border-radius:var(--radius);
     padding:14px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px;
-    cursor:pointer; box-shadow:0 1px 2px rgba(16,24,40,.04);
+    cursor:pointer; box-shadow:0 1px 3px rgba(16,24,40,.05); transition:box-shadow .15s, transform .1s;
   }
-  .order-card:active{ background:var(--bg-raised); }
-  .order-card .no{ font-family:var(--mono); font-size:13px; color:var(--text-dim); }
-  .order-card .title{ font-size:15px; font-weight:600; margin-top:2px; }
+  .order-card:active{ background:var(--bg-raised); transform:scale(.995); }
+  .order-card .no{ font-family:var(--mono); font-size:12.5px; color:var(--text-dim); letter-spacing:.1px; }
+  .order-card .title{ font-size:15px; font-weight:650; margin-top:2px; }
   .order-card .meta{ font-size:12.5px; color:var(--text-dim); margin-top:3px; }
   .order-card .right{ margin-left:auto; text-align:right; flex:none; }
   .chevron{ color:var(--text-dim); font-size:18px; }
 
   .pill{
-    display:inline-block; padding:3px 9px; border-radius:100px; font-size:11px; font-weight:600;
+    display:inline-block; padding:4px 10px; border-radius:100px; font-size:11px; font-weight:650;
     letter-spacing:.2px;
   }
   .pill.pending{ background:var(--wait-bg); color:var(--wait); }
   .pill.checking{ background:var(--accent-dim); color:var(--accent); }
   .pill.ready{ background:var(--ok-bg); color:var(--ok); }
   .pill.billed{ background:#EDEEF0; color:var(--text-dim); }
+  .order-card:has(.pill.pending){ border-left-color:var(--wait); }
+  .order-card:has(.pill.checking){ border-left-color:var(--accent); }
+  .order-card:has(.pill.ready){ border-left-color:var(--ok); }
+  .order-card:has(.pill.billed){ border-left-color:var(--line); }
 
-  .section-label{ font-size:12.5px; color:var(--text-dim); text-transform:none; margin:18px 2px 8px; }
+  .section-label{ font-size:12px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.4px; margin:18px 2px 8px; }
 
   /* ---- item rows (packing check) ---- */
   .item-row{
     background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
     padding:12px 13px; margin-bottom:9px; transition:background .15s, border-color .15s;
-    box-shadow:0 1px 2px rgba(16,24,40,.04);
+    box-shadow:0 1px 3px rgba(16,24,40,.05);
   }
   .item-row.mismatch{ background:var(--bad-bg); border-color:#F3B9B6; }
   .item-top{ display:flex; justify-content:space-between; gap:10px; }
@@ -80,10 +87,10 @@
   .field .readonly{ font-family:var(--mono); font-size:14.5px; color:var(--text-dim); padding:8px 0; }
   .field input{
     background:var(--bg-raised); border:1px solid var(--line); color:var(--text);
-    border-radius:7px; padding:8px 9px; font-size:15px; font-family:var(--mono); width:100%;
+    border-radius:8px; padding:8px 9px; font-size:15px; font-family:var(--mono); width:100%;
   }
   .item-row.mismatch .field input{ border-color:var(--bad); }
-  .field input:focus{ outline:none; border-color:var(--accent); }
+  .field input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
   .field input::placeholder{ color:var(--text-dim); opacity:.55; }
   .mismatch-tag{ font-size:10.5px; color:var(--bad); margin-top:8px; font-weight:600; }
 
@@ -118,7 +125,7 @@
   .btn:disabled{ opacity:.4; }
 
   .topbar{ display:flex; align-items:center; gap:10px; }
-  .backbtn{ background:none; border:none; color:var(--text); font-size:20px; padding:2px 6px 2px 0; cursor:pointer; }
+  .backbtn{ background:none; border:none; color:#FFFFFF; font-size:20px; padding:2px 6px 2px 0; cursor:pointer; }
 
   /* ---- bottom tab nav ---- */
   nav.tabbar{
@@ -165,8 +172,8 @@
   .role-card .role-desc{ font-size:12.5px; color:var(--text-dim); }
   .role-badge{
     display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.3px;
-    color:var(--accent); background:var(--accent-dim); padding:2px 8px; border-radius:100px;
-    cursor:pointer;
+    color:#FFFFFF; background:rgba(255,255,255,.16); padding:4px 10px; border-radius:100px;
+    cursor:pointer; border:1px solid rgba(255,255,255,.2);
   }
 </style>
 </head>
