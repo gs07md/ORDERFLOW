@@ -221,7 +221,12 @@ def push_orders_to_firestore(new_orders):
     base_url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/orders"
     pushed = 0
     for order_no, items in grouped.items():
-        doc_id = f"vfs-{order_no}"
+        billdate = date_of.get(order_no, date.today().isoformat())
+        # Order numbers in Value-FAS are NOT unique across different days
+        # (they get reused) -- so the doc id must include the date too,
+        # or a new order can silently collide with an old already-billed
+        # one that happened to share the same number.
+        doc_id = f"vfs-{billdate}-{order_no}"
         if doc_id in known:
             continue  # already pushed earlier -- never re-check Firestore, never overwrite staff progress
 
@@ -230,7 +235,7 @@ def push_orders_to_firestore(new_orders):
             "orderNo": order_no,
             "party": party_of.get(order_no, "Unknown Party"),
             "location": location_of.get(order_no, ""),
-            "date": date_of.get(order_no, date.today().isoformat()),
+            "date": billdate,
             "acCode": accode_of.get(order_no, ""),
             "status": "pending",
             "items": items,
