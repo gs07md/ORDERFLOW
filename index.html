@@ -633,7 +633,7 @@ function renderOrderList(){
     const total = o.items.length;
     const mismatches = o.items.filter(it => it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp))).length;
     return `
-      <div class="order-card" onclick="goToOrder('${o.id}')">
+      <div class="order-card" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')).toLowerCase()}" onclick="goToOrder('${o.id}')">
         <div>
           <div class="no">${o.orderNo}${o.location ? ' · '+o.location : ''}${o.date ? ' · '+o.date : ''}</div>
           <div class="title">${o.party}</div>
@@ -646,8 +646,37 @@ function renderOrderList(){
       </div>`;
   }).join('');
 
-  main.innerHTML = `<div class="section-label">Today's orders</div>${rows}
+  main.innerHTML = `
+    <div class="field" style="margin-bottom:12px;">
+      <input id="order-search" placeholder="Order no, party ya location search karo..." oninput="filterOrderList()"
+        style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
+    </div>
+    <div class="section-label">Today's orders</div>
+    <div id="order-list-rows">${rows}</div>
     <div class="fab-note">Order Value-FAS mathi manually umervi pade che abhi. Sync script connect thay pachi automatic aavse.</div>`;
+}
+
+function filterOrderList(){
+  const q = (document.getElementById('order-search')?.value || '').trim().toLowerCase();
+  const cards = document.querySelectorAll('#order-list-rows .order-card');
+  let visibleCount = 0;
+  cards.forEach(c => {
+    const match = !q || c.dataset.search.includes(q);
+    c.style.display = match ? '' : 'none';
+    if(match) visibleCount++;
+  });
+  let noResultEl = document.getElementById('order-search-noresult');
+  if(visibleCount === 0){
+    if(!noResultEl){
+      noResultEl = document.createElement('div');
+      noResultEl.id = 'order-search-noresult';
+      noResultEl.className = 'empty';
+      noResultEl.textContent = 'Koi order na malyu.';
+      document.getElementById('order-list-rows').appendChild(noResultEl);
+    }
+  } else if(noResultEl){
+    noResultEl.remove();
+  }
 }
 
 /* -------- Order detail: packing check + recheck -------- */
@@ -708,7 +737,7 @@ function renderPackingCheck(o){
     const done = it.aqty !== null && it.aqty !== undefined;
     const stk = stockLookup(it.code);
     return `
-      <div class="item-row ${mismatch?'mismatch':''}" id="row-${idx}">
+      <div class="item-row ${mismatch?'mismatch':''}" id="row-${idx}" data-search="${(it.code+' '+it.desc).toLowerCase()}">
         <div class="item-top">
           <div>
             <div class="item-code">${srNo+1}. ${it.code} <span style="color:${done?'var(--ok)':'var(--bad)'}; font-weight:700;">${done?'✓':'✗'}</span></div>
@@ -740,10 +769,22 @@ function renderPackingCheck(o){
   }).join('');
 
   main.innerHTML = `
+    <div class="field" style="margin-bottom:12px;">
+      <input id="item-search" placeholder="Item code ya naam search karo..." oninput="filterItemRows()"
+        style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
+    </div>
     <div class="status-banner">Har item ni Actual Qty ane Actual Rate bharo. Khali rakhso to Ordered value j use thashe. Farak hoy to row lal thai jashe. ✓/✗ batave che picker e kaam puru karyu ke nahi.</div>
-    ${rows}
+    <div id="item-rows-container">${rows}</div>
     <button class="btn btn-primary" onclick="finishPacking('${o.id}')">Packing Done → Recheck</button>
   `;
+}
+
+function filterItemRows(){
+  const q = (document.getElementById('item-search')?.value || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#item-rows-container .item-row');
+  rows.forEach(r => {
+    r.style.display = (!q || r.dataset.search.includes(q)) ? '' : 'none';
+  });
 }
 
 function renderPickerSingleItem(o){
@@ -967,7 +1008,24 @@ function stockLookup(code){
 
 async function preloadStock(){
   if(stockCache) return;
+  // Cache in localStorage for 15 min -- the stock catalog can be
+  // thousands of docs, and re-fetching all of it on every single page
+  // load across every phone is what burns through the Firestore free
+  // read quota in a single afternoon.
+  const CACHE_KEY = 'orderflow_stock_cache';
+  const CACHE_MS = 15 * 60 * 1000;
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(Date.now() - parsed.ts < CACHE_MS){
+        stockCache = parsed.data;
+        return;
+      }
+    }
+  }catch(e){}
   stockCache = await fetchAllStock();
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts: Date.now(), data: stockCache})); }catch(e){}
 }
 
 render();
