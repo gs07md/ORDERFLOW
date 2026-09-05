@@ -27,7 +27,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.utils import get_column_letter
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from pathlib import Path
 import os
 import json
@@ -39,7 +39,7 @@ import urllib.error
 # =====================================================================
 DB_BASE = r"H:\VALUE"                # same as business_reports.py / reorder_pro.py
 ORDER_ENTRY_CODE = "ORD"             # script self-checks this -- see fetch_new_orders()
-LOOKBACK_DAYS = 1                    # only pull TODAY's orders (Entry stays 'ORD' forever, even after billing)
+LOOKBACK_DAYS = 0                    # 0 = ONLY today's orders (Entry stays 'ORD' forever, even after billing)
 FIREBASE_API_KEY = "AIzaSyAWGy4fQTmqBmurJRcz1OiNuOeTNslGmxc"       # same 2 values as in OrderFlow.html
 FIREBASE_PROJECT_ID = "giriraj-bills"
 # =====================================================================
@@ -136,12 +136,12 @@ def fetch_new_orders():
 
     query = """
         SELECT m.BillC, m.Bill, t.ItemCode, im.ItemName, t.Qty, t.NetRate,
-               ac.AcName, ac.City, m.AreaCode
+               ac.AcName, ac.City, m.AreaCode, m.BillDate, m.AcCode
         FROM ((InvMast AS m
               INNER JOIN InvTran AS t ON m.BillC = t.BillC AND m.Bill = t.Bill)
               INNER JOIN ItemMast AS im ON t.ItemCode = im.ItemCode)
               LEFT JOIN Account AS ac ON m.AcCode = ac.AcCode
-        WHERE m.Entry = ? AND m.BillDate >= ?
+        WHERE m.Entry = ? AND m.Book = 'SAL' AND m.BillDate >= ?
         ORDER BY m.BillC, m.Bill, t.AutoNo
     """
     cur.execute(query, (ORDER_ENTRY_CODE, cutoff))
@@ -175,7 +175,9 @@ def fetch_new_orders():
             return str(b)
     return [
         (f"{r[0]}{clean_bill(r[1])}", str(r[2]), str(r[3]), float(r[4] or 0), float(r[5] or 0),
-         str(r[6]).strip() if r[6] else "Unknown Party", str(r[7]).strip() if r[7] else str(r[8] or "").strip())
+         str(r[6]).strip() if r[6] else "Unknown Party", str(r[7]).strip() if r[7] else str(r[8] or "").strip(),
+         r[9].date().isoformat() if r[9] else date.today().isoformat(),
+         str(r[10]).strip() if r[10] else "")
         for r in rows
     ]
 
@@ -189,10 +191,14 @@ def push_orders_to_firestore(new_orders):
     grouped = {}
     party_of = {}
     location_of = {}
+    date_of = {}
+    accode_of = {}
     seen_codes = {}
-    for order_no, code, desc, qty, rate, party, location in new_orders:
+    for order_no, code, desc, qty, rate, party, location, billdate, accode in new_orders:
         party_of[order_no] = party
         location_of[order_no] = location
+        date_of[order_no] = billdate
+        accode_of[order_no] = accode
         seen = seen_codes.setdefault(order_no, set())
         if code in seen:
             continue  # dedupe: same item code already added for this order
@@ -201,31 +207,31 @@ def push_orders_to_firestore(new_orders):
             "code": code, "desc": desc, "oqty": qty, "mrp": rate,
             "aqty": None, "arate": None,
         })
+
+    # Track which orders we've already pushed in a LOCAL file, instead of
+    # asking Firestore "does this exist?" every single cycle. At a 3-second
+    # cycle that existence-check alone would burn through the free daily
+    # read quota in minutes.
+    known_path = Path(os.path.dirname(os.path.abspath(__file__))) / ".known_orders.json"
+    try:
+        known = set(json.loads(known_path.read_text())) if known_path.exists() else set()
+    except Exception:
+        known = set()
+
     base_url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/orders"
     pushed = 0
     for order_no, items in grouped.items():
         doc_id = f"vfs-{order_no}"
-        # Skip if this order already exists in Firestore -- staff may have
-        # already started packing/checking it; never reset their progress.
-        check_url = f"{base_url}/{doc_id}?key={FIREBASE_API_KEY}"
-        try:
-            check = urllib.request.urlopen(check_url, timeout=10)
-            if check.status == 200:
-                continue  # already there, leave it untouched
-        except urllib.error.HTTPError as e:
-            if e.code != 404:
-                print(f"[warn] Firestore check failed for {order_no}: {e}")
-                continue
-        except urllib.error.URLError as e:
-            print(f"[warn] Firestore check failed for {order_no}: {e}")
-            continue
+        if doc_id in known:
+            continue  # already pushed earlier -- never re-check Firestore, never overwrite staff progress
 
         order = {
             "id": doc_id,
             "orderNo": order_no,
             "party": party_of.get(order_no, "Unknown Party"),
             "location": location_of.get(order_no, ""),
-            "date": date.today().isoformat(),
+            "date": date_of.get(order_no, date.today().isoformat()),
+            "acCode": accode_of.get(order_no, ""),
             "status": "pending",
             "items": items,
         }
@@ -236,12 +242,88 @@ def push_orders_to_firestore(new_orders):
         try:
             urllib.request.urlopen(req, timeout=10)
             pushed += 1
+            known.add(doc_id)
         except urllib.error.URLError as e:
             print(f"[warn] Firestore push failed for {order_no}: {e}")
+    known_path.write_text(json.dumps(list(known)))
     if pushed:
         print(f"[info] Pushed {pushed} NEW order(s) to Firestore -> phones will see them within 15 sec.")
     else:
         print("[info] No new orders to push (all already synced).")
+
+
+
+
+
+def push_stock_to_firestore():
+    """Push ItemMast stock (Qty, rack 'location' from ItemCtg, rate) to
+    Firestore -- but ONLY items whose Qty/Rate/Location actually changed
+    since the last run, and at most MAX_STOCK_PUSH_PER_RUN per call so a
+    huge catalog's first-time sync doesn't block order syncing (which
+    needs to run every few seconds)."""
+    MAX_STOCK_PUSH_PER_RUN = 300
+
+    snapshot_path = Path(os.path.dirname(os.path.abspath(__file__))) / ".stock_snapshot.json"
+    try:
+        snapshot = json.loads(snapshot_path.read_text()) if snapshot_path.exists() else {}
+    except Exception:
+        snapshot = {}
+
+    db_path = resolve_db_path()
+    conn_str = (
+        r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
+        rf"DBQ={db_path};ReadOnly=1;"
+    )
+    conn = pyodbc.connect(conn_str)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT im.ItemCode, im.ItemName, im.SitQty, im.MinQty, im.SRate, ic.ICtgName
+        FROM ItemMast AS im
+        LEFT JOIN ItemCtg AS ic ON im.ICtgCode = ic.ICtgCode
+        WHERE im.NotShow <> 'Y'
+    """)
+    rows = cur.fetchall()
+    conn.close()
+
+    base_url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/stock"
+    pushed = 0
+    checked = 0
+    for r in rows:
+        if pushed >= MAX_STOCK_PUSH_PER_RUN:
+            break  # leave the rest for the next cycle (a few seconds later) -- keeps order sync snappy
+        item_code, item_name, sit_qty, min_qty, rate, loc_name = r
+        if not item_code:
+            continue
+        checked += 1
+        code = str(item_code).strip()
+        doc_id = code.replace("/", "_")
+        item = {
+            "code": code,
+            "name": str(item_name or "").strip(),
+            "qty": float(sit_qty or 0),
+            "minQty": float(min_qty or 0),
+            "rate": float(rate or 0),
+            "location": str(loc_name).strip() if loc_name else "",
+        }
+        # compare against last known snapshot -- skip the write entirely
+        # if nothing actually changed for this item
+        prev = snapshot.get(doc_id)
+        if prev == item:
+            continue
+
+        item_with_ts = dict(item, updated=datetime.now().isoformat())
+        body = json.dumps({"fields": {"json": {"stringValue": json.dumps(item_with_ts)}}}).encode("utf-8")
+        req = urllib.request.Request(f"{base_url}/{doc_id}?key={FIREBASE_API_KEY}", data=body,
+                                      method="PATCH", headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(req, timeout=10)
+            pushed += 1
+            snapshot[doc_id] = item  # remember what we just pushed (without timestamp)
+        except urllib.error.URLError as e:
+            print(f"[warn] Stock push failed for {item_code}: {e}")
+
+    snapshot_path.write_text(json.dumps(snapshot))
+    print(f"[info] Stock sync: {pushed} changed item(s) pushed out of {checked} checked.")
 
 
 def style_data_row(ws, r):
@@ -296,12 +378,13 @@ def existing_keys(ws, last_row):
 
 
 def main():
-    print("[version] sync_orders.py v5 (fixed Excel-write unpack crash)")
+    print("[version] sync_orders.py v6 (real BillDate stored, not sync-run date)")
     output_path = get_output_path()
     print(f"[info] Orders.xlsx will be saved to: {output_path}")
 
     new_orders = fetch_new_orders()
     push_orders_to_firestore(new_orders)
+    push_stock_to_firestore()
     wb, ws = load_or_create_workbook(output_path)
 
     last_row = HEADER_ROW
@@ -314,7 +397,7 @@ def main():
     sr = last_row - HEADER_ROW
 
     added = 0
-    for order_no, code, desc, qty, rate, party, location in new_orders:
+    for order_no, code, desc, qty, rate, party, location, billdate, accode in new_orders:
         if (order_no, code) in known:
             continue
         last_row += 1
