@@ -175,6 +175,10 @@
     color:#FFFFFF; background:rgba(255,255,255,.16); padding:4px 10px; border-radius:100px;
     cursor:pointer; border:1px solid rgba(255,255,255,.2);
   }
+  .status-chip{
+    flex:none; font-size:12px; font-weight:600; padding:7px 13px; border-radius:100px;
+    border:1px solid var(--line); cursor:pointer; white-space:nowrap;
+  }
 </style>
 </head>
 <body>
@@ -305,6 +309,14 @@ function startLiveSync(){
   if(!FIREBASE_CONFIGURED) return;
   setInterval(async ()=>{
     const remote = await pullFromSupabase();
+    // Refresh stock (item location, qty, rate) on the SAME cycle as
+    // orders -- so location data is never more stale than the orders
+    // themselves. Runs alongside the order pull, not gated behind the
+    // old 15-min cache.
+    fetchAllStock().then(fresh => {
+      stockCache = fresh;
+      try{ localStorage.setItem('orderflow_stock_cache', JSON.stringify({ts: Date.now(), data: fresh})); }catch(e){}
+    }).catch(()=>{});
     if(remote === null) return;
     // Supabase is the source of truth. Replace local orders with the
     // remote list every poll (so deletions/cleanups on the server side
@@ -654,7 +666,7 @@ function renderOrderList(){
     const total = o.items.length;
     const mismatches = o.items.filter(it => it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp))).length;
     return `
-      <div class="order-card" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')).toLowerCase()}" onclick="goToOrder('${o.id}')">
+      <div class="order-card" data-status="${o.status}" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')+' '+o.items.map(it=>it.code).join(' ')).toLowerCase()}" onclick="goToOrder('${o.id}')">
         <div>
           <div class="no">${o.orderNo}${o.location ? ' · '+o.location : ''}${o.date ? ' · '+o.date : ''}</div>
           <div class="title">${o.party}</div>
@@ -667,14 +679,37 @@ function renderOrderList(){
       </div>`;
   }).join('');
 
+  const statusCounts = {pending:0, checking:0, ready:0, billed:0};
+  orders.forEach(o => { if(statusCounts[o.status]!==undefined) statusCounts[o.status]++; });
+  const filterChips = ['all','pending','checking','ready','billed'].map(s => {
+    const label = s==='all' ? `All (${orders.length})` : `${statusLabel(s)} (${statusCounts[s]||0})`;
+    return `<button class="status-chip" data-status-filter="${s}" onclick="setOrderStatusFilter('${s}')">${label}</button>`;
+  }).join('');
+
   main.innerHTML = `
-    <div class="field" style="margin-bottom:12px;">
-      <input id="order-search" placeholder="Order no, party ya location search karo..." oninput="filterOrderList()"
+    <div class="field" style="margin-bottom:10px;">
+      <input id="order-search" placeholder="Order no, party, location ya item code search karo..." oninput="filterOrderList()"
         style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
     </div>
+    <div id="status-chip-row" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px;">${filterChips}</div>
     <div class="section-label">Today's orders</div>
     <div id="order-list-rows">${rows}</div>
     <div class="fab-note">Order Value-FAS mathi manually umervi pade che abhi. Sync script connect thay pachi automatic aavse.</div>`;
+  updateStatusChipStyles();
+}
+
+let orderStatusFilter = 'all';
+function setOrderStatusFilter(s){
+  orderStatusFilter = s;
+  updateStatusChipStyles();
+  filterOrderList();
+}
+function updateStatusChipStyles(){
+  document.querySelectorAll('.status-chip').forEach(btn => {
+    const active = btn.dataset.statusFilter === orderStatusFilter;
+    btn.style.background = active ? 'var(--accent)' : 'var(--bg-raised)';
+    btn.style.color = active ? '#FFFFFF' : 'var(--text)';
+  });
 }
 
 function filterOrderList(){
@@ -682,7 +717,9 @@ function filterOrderList(){
   const cards = document.querySelectorAll('#order-list-rows .order-card');
   let visibleCount = 0;
   cards.forEach(c => {
-    const match = !q || c.dataset.search.includes(q);
+    const matchesText = !q || c.dataset.search.includes(q);
+    const matchesStatus = orderStatusFilter === 'all' || c.dataset.status === orderStatusFilter;
+    const match = matchesText && matchesStatus;
     c.style.display = match ? '' : 'none';
     if(match) visibleCount++;
   });
@@ -1034,7 +1071,7 @@ async function preloadStock(){
   // load across every phone is what burns through the Firestore free
   // read quota in a single afternoon.
   const CACHE_KEY = 'orderflow_stock_cache';
-  const CACHE_MS = 15 * 60 * 1000;
+  const CACHE_MS = 2 * 60 * 1000;
   try{
     const raw = localStorage.getItem(CACHE_KEY);
     if(raw){
