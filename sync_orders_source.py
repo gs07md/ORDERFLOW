@@ -40,8 +40,14 @@ import urllib.error
 DB_BASE = r"H:\VALUE"                # same as business_reports.py / reorder_pro.py
 ORDER_ENTRY_CODE = "ORD"             # script self-checks this -- see fetch_new_orders()
 LOOKBACK_DAYS = 0                    # 0 = ONLY today's orders (Entry stays 'ORD' forever, even after billing)
-FIREBASE_API_KEY = "AIzaSyAWGy4fQTmqBmurJRcz1OiNuOeTNslGmxc"       # same 2 values as in OrderFlow.html
-FIREBASE_PROJECT_ID = "giriraj-bills"
+SUPABASE_URL = "https://mzzieomklvphwfwyiqjn.supabase.co"
+SUPABASE_KEY = "sb_publishable_NUY-qCvUPIUoShzYZdaqZQ_c3z-Olco"
+SB_HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "resolution=merge-duplicates",
+}
 # =====================================================================
 
 FONT = "Arial"
@@ -182,12 +188,10 @@ def fetch_new_orders():
     ]
 
 
-def push_orders_to_firestore(new_orders):
+def push_orders_to_supabase(new_orders):
     """Group flat (order_no, code, desc, qty, rate, party, location) rows
-    into one Firestore doc per order, matching OrderFlow.html's schema
-    exactly. Skipped silently if Firebase isn't configured yet."""
-    if not FIREBASE_API_KEY:
-        return
+    into one Supabase row per order, matching OrderFlow.html's schema
+    exactly."""
     grouped = {}
     party_of = {}
     location_of = {}
@@ -209,60 +213,55 @@ def push_orders_to_firestore(new_orders):
         })
 
     # Track which orders we've already pushed in a LOCAL file, instead of
-    # asking Firestore "does this exist?" every single cycle. At a 3-second
-    # cycle that existence-check alone would burn through the free daily
-    # read quota in minutes.
+    # asking Supabase "does this exist?" every single cycle.
     known_path = Path(os.path.dirname(os.path.abspath(__file__))) / ".known_orders.json"
     try:
         known = set(json.loads(known_path.read_text())) if known_path.exists() else set()
     except Exception:
         known = set()
 
-    base_url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/orders"
+    url = f"{SUPABASE_URL}/rest/v1/orders"
     pushed = 0
     for order_no, items in grouped.items():
         billdate = date_of.get(order_no, date.today().isoformat())
         # Order numbers in Value-FAS are NOT unique across different days
-        # (they get reused) -- so the doc id must include the date too,
-        # or a new order can silently collide with an old already-billed
-        # one that happened to share the same number.
+        # (they get reused) -- so the id must include the date too, or a
+        # new order can silently collide with an old already-billed one
+        # that happened to share the same number.
         doc_id = f"vfs-{billdate}-{order_no}"
         if doc_id in known:
-            continue  # already pushed earlier -- never re-check Firestore, never overwrite staff progress
+            continue  # already pushed earlier -- never re-check Supabase, never overwrite staff progress
 
-        order = {
+        row = {
             "id": doc_id,
-            "orderNo": order_no,
+            "order_no": order_no,
             "party": party_of.get(order_no, "Unknown Party"),
             "location": location_of.get(order_no, ""),
-            "date": billdate,
-            "acCode": accode_of.get(order_no, ""),
+            "order_date": billdate,
+            "ac_code": accode_of.get(order_no, ""),
             "status": "pending",
             "items": items,
         }
-        body = json.dumps({"fields": {"json": {"stringValue": json.dumps(order)}}}).encode("utf-8")
-        url = f"{base_url}/{doc_id}?key={FIREBASE_API_KEY}"
-        req = urllib.request.Request(url, data=body, method="PATCH",
-                                      headers={"Content-Type": "application/json"})
+        body = json.dumps(row).encode("utf-8")
+        req = urllib.request.Request(url, data=body, method="POST", headers=SB_HEADERS)
         try:
             urllib.request.urlopen(req, timeout=10)
             pushed += 1
             known.add(doc_id)
         except urllib.error.URLError as e:
-            print(f"[warn] Firestore push failed for {order_no}: {e}")
+            print(f"[warn] Supabase push failed for {order_no}: {e}")
     known_path.write_text(json.dumps(list(known)))
     if pushed:
-        print(f"[info] Pushed {pushed} NEW order(s) to Firestore -> phones will see them within 15 sec.")
+        print(f"[info] Pushed {pushed} NEW order(s) to Supabase -> phones will see them within 1 min.")
     else:
         print("[info] No new orders to push (all already synced).")
 
 
 
 
-
-def push_stock_to_firestore():
+def push_stock_to_supabase():
     """Push ItemMast stock (Qty, rack 'location' from ItemCtg, rate) to
-    Firestore -- but ONLY items whose Qty/Rate/Location actually changed
+    Supabase -- but ONLY items whose Qty/Rate/Location actually changed
     since the last run, and at most MAX_STOCK_PUSH_PER_RUN per call so a
     huge catalog's first-time sync doesn't block order syncing (which
     needs to run every few seconds)."""
@@ -290,7 +289,7 @@ def push_stock_to_firestore():
     rows = cur.fetchall()
     conn.close()
 
-    base_url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/stock"
+    url = f"{SUPABASE_URL}/rest/v1/stock"
     pushed = 0
     checked = 0
     for r in rows:
@@ -316,14 +315,16 @@ def push_stock_to_firestore():
         if prev == item:
             continue
 
-        item_with_ts = dict(item, updated=datetime.now().isoformat())
-        body = json.dumps({"fields": {"json": {"stringValue": json.dumps(item_with_ts)}}}).encode("utf-8")
-        req = urllib.request.Request(f"{base_url}/{doc_id}?key={FIREBASE_API_KEY}", data=body,
-                                      method="PATCH", headers={"Content-Type": "application/json"})
+        row = {
+            "code": doc_id, "name": item["name"], "qty": item["qty"],
+            "min_qty": item["minQty"], "rate": item["rate"], "location": item["location"],
+        }
+        body = json.dumps(row).encode("utf-8")
+        req = urllib.request.Request(url, data=body, method="POST", headers=SB_HEADERS)
         try:
             urllib.request.urlopen(req, timeout=10)
             pushed += 1
-            snapshot[doc_id] = item  # remember what we just pushed (without timestamp)
+            snapshot[doc_id] = item  # remember what we just pushed
         except urllib.error.URLError as e:
             print(f"[warn] Stock push failed for {item_code}: {e}")
 
@@ -388,8 +389,8 @@ def main():
     print(f"[info] Orders.xlsx will be saved to: {output_path}")
 
     new_orders = fetch_new_orders()
-    push_orders_to_firestore(new_orders)
-    push_stock_to_firestore()
+    push_orders_to_supabase(new_orders)
+    push_stock_to_supabase()
     wb, ws = load_or_create_workbook(output_path)
 
     last_row = HEADER_ROW
