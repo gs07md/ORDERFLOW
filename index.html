@@ -199,7 +199,6 @@
 
 <nav class="tabbar">
   <button data-tab="orders" class="active"><span class="ico">▤</span>Orders</button>
-  <button data-tab="add"><span class="ico">＋</span>New Order</button>
 </nav>
 
 <div id="modalRoot"></div>
@@ -401,7 +400,6 @@ function statusPillClass(s){
 tabbar.addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-tab]');
   if(!btn) return;
-  if(btn.dataset.tab === 'add'){ openAddOrderModal(); return; }
   activeTab = btn.dataset.tab;
   currentOrderId = null;
   [...tabbar.children].forEach(b=>b.classList.toggle('active', b===btn));
@@ -442,6 +440,10 @@ function renderPhoneLogin(){
     <div class="field" style="max-width:320px;">
       <input id="login-phone" inputmode="numeric" placeholder="98765 43210" style="font-size:18px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-panel);">
     </div>
+    <div class="section-label">Tamaru naam nakho</div>
+    <div class="field" style="max-width:320px;">
+      <input id="login-name" placeholder="Jem Ramesh Bhai" style="font-size:16px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-panel);">
+    </div>
     <button class="btn btn-primary" style="max-width:320px;" onclick="doPhoneLogin()">Login</button>
     <div class="fab-note">Nava number ne CEO j role assign kari shake che (Manage Users thi).</div>
   `;
@@ -449,6 +451,7 @@ function renderPhoneLogin(){
 
 async function doPhoneLogin(){
   const raw = document.getElementById('login-phone').value.trim();
+  const nameInput = document.getElementById('login-name').value.trim();
   const phone = raw.replace(/\D/g, '');
   if(phone.length < 10){ alert('Sahi 10-digit mobile number nakho'); return; }
 
@@ -456,14 +459,16 @@ async function doPhoneLogin(){
   if(existing){
     currentRole = existing.role;
     currentPhone = phone;
-    currentName = existing.name || '';
+    currentName = nameInput || existing.name || '';
+    if(nameInput && nameInput !== existing.name) await setUser(phone, existing.role, nameInput);
   } else {
     const noUsersYet = !(await anyUsersExist());
     if(noUsersYet){
       // Bootstrap: the very first person to log in becomes CEO.
-      await setUser(phone, 'ceo', '');
+      await setUser(phone, 'ceo', nameInput);
       currentRole = 'ceo';
       currentPhone = phone;
+      currentName = nameInput;
     } else {
       alert('Aa number register nathi thayu. CEO ne kaho tamne "Manage Users" thi umerva mate.');
       return;
@@ -658,7 +663,7 @@ function renderOrderList(){
   }
 
   if(orders.length === 0){
-    main.innerHTML = `<div class="empty">Koi order nathi. Niche "New Order" thi umero.</div>`;
+    main.innerHTML = `<div class="empty">Koi order nathi. Value-FAS ma navi order banavta j apoap aavi jashe.</div>`;
     return;
   }
 
@@ -997,42 +1002,23 @@ function renderFinalBill(o){
     <div class="summary-card">
       <div class="summary-line total"><span>Net Amount</span><span class="val">₹ ${fmt(total)}</span></div>
     </div>
+    ${currentRole==='ceo' ? `<button class="btn btn-ghost" onclick="resetToPending('${o.id}')">↺ Reset to Pending (galti thi Billed thayu hoy to)</button>` : ''}
   `;
 }
 
-/* -------- Add order (manual, until sync is wired) -------- */
-function openAddOrderModal(){
-  modalRoot.innerHTML = `
-    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
-      <div class="modal">
-        <h3>New Order</h3>
-        <div class="row2">
-          <div class="field"><label>ORDER NO.</label><input id="f-orderno" placeholder="C-032"></div>
-          <div class="field"><label>PARTY</label><input id="f-party" placeholder="Retail Counter"></div>
-        </div>
-        <div class="section-label" style="margin-top:10px;">Items (Code, Description, Qty, Rate — ek line dith item)</div>
-        <textarea id="f-items" rows="6" style="width:100%; background:var(--bg-raised); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:9px; font-family:var(--mono); font-size:13px;" placeholder="24681, bos-4-T OIL 10W/30, 30, 454"></textarea>
-        <button class="btn btn-primary" onclick="saveNewOrder()">Create Order</button>
-        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      </div>
-    </div>`;
-}
-function closeModal(){ modalRoot.innerHTML=''; }
-function saveNewOrder(){
-  const orderNo = document.getElementById('f-orderno').value.trim() || ('ORD-'+Date.now());
-  const party = document.getElementById('f-party').value.trim() || 'Untitled';
-  const lines = document.getElementById('f-items').value.split('\n').map(l=>l.trim()).filter(Boolean);
-  const items = lines.map(l=>{
-    const [code, desc, qty, rate] = l.split(',').map(s=>s.trim());
-    return {code:code||'-', desc:desc||'-', oqty:Number(qty)||0, mrp:Number(rate)||0, aqty:null, arate:null};
-  });
-  if(items.length===0){ alert('Ochamu ek item umero'); return; }
-  orders.unshift({ id:'ord'+Date.now(), orderNo, party, date:new Date().toISOString().slice(0,10), status:'pending', items });
+function resetToPending(orderId){
+  if(!confirm('Aa order pacho "Pending" ma levo che? Value-FAS ma bill banavyu hoy to e alag thi delete karvu padse.')) return;
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  o.status = 'pending';
+  o.fasEntryStarted = false;
   DB.save(orders);
-  closeModal();
   currentOrderId = null;
   render();
 }
+
+/* -------- Add order manually removed: all orders now come
+   automatically from Value-FAS via the sync script. -------- */
 
 async function syncNowOnLoad(){
   if(!FIREBASE_CONFIGURED || !currentRole) return;
