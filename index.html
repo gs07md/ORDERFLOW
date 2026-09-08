@@ -667,11 +667,14 @@ function renderOrderList(){
     return;
   }
 
+  const isCeo = currentRole === 'ceo';
   const rows = orders.map(o=>{
     const total = o.items.length;
     const mismatches = o.items.filter(it => it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp))).length;
+    const showCheckbox = isCeo && o.status === 'ready';
     return `
       <div class="order-card" data-status="${o.status}" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')+' '+o.items.map(it=>it.code).join(' ')).toLowerCase()}" onclick="goToOrder('${o.id}')">
+        ${showCheckbox ? `<input type="checkbox" class="batch-bill-check" data-order-id="${o.id}" onclick="event.stopPropagation(); updateBatchBillBar();" style="width:20px; height:20px; flex:none; margin-right:2px;">` : ''}
         <div>
           <div class="no">${o.orderNo}${o.location ? ' · '+o.location : ''}${o.date ? ' · '+o.date : ''}</div>
           <div class="title">${o.party}</div>
@@ -697,10 +700,38 @@ function renderOrderList(){
         style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
     </div>
     <div id="status-chip-row" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px;">${filterChips}</div>
+    ${isCeo ? `<div id="batch-bill-bar" class="hidden" style="display:none; align-items:center; gap:10px; background:var(--accent-dim); border-radius:8px; padding:10px 12px; margin-bottom:12px;">
+      <span id="batch-bill-count" style="font-size:13px; font-weight:600; color:var(--accent);">0 order pasand karya</span>
+      <button class="btn btn-primary" style="margin:0; width:auto; padding:8px 16px;" onclick="generateBatchBills()">Badha na Bill Banavo</button>
+    </div>` : ''}
     <div class="section-label">Today's orders</div>
     <div id="order-list-rows">${rows}</div>
     <div class="fab-note">Order Value-FAS mathi manually umervi pade che abhi. Sync script connect thay pachi automatic aavse.</div>`;
   updateStatusChipStyles();
+}
+
+function updateBatchBillBar(){
+  const bar = document.getElementById('batch-bill-bar');
+  if(!bar) return;
+  const checked = document.querySelectorAll('.batch-bill-check:checked').length;
+  bar.style.display = checked > 0 ? 'flex' : 'none';
+  const countEl = document.getElementById('batch-bill-count');
+  if(countEl) countEl.textContent = `${checked} order pasand karya`;
+}
+
+function generateBatchBills(){
+  const ids = [...document.querySelectorAll('.batch-bill-check:checked')].map(c => c.dataset.orderId);
+  if(ids.length === 0) return;
+  if(!confirm(`${ids.length} order na bill ek sathe banavva che?`)) return;
+  ids.forEach(id => {
+    const o = orders.find(x => x.id === id);
+    if(o && o.status === 'ready'){
+      o.status = 'billed';
+      o.billedAt = new Date().toISOString();
+    }
+  });
+  DB.save(orders);
+  render();
 }
 
 let orderStatusFilter = 'all';
@@ -967,7 +998,9 @@ function renderRecheck(o){
     <div class="summary-card">
       <div class="summary-line total"><span>Final Bill Amount</span><span class="val">₹ ${fmt(total)}</span></div>
     </div>
-    <button class="btn btn-primary" onclick="confirmBill('${o.id}')">Confirm &amp; Generate Bill</button>
+    ${currentRole === 'ceo'
+      ? `<button class="btn btn-primary" onclick="confirmBill('${o.id}')">Confirm &amp; Generate Bill</button>`
+      : `<div class="fab-note">Matra CEO j bill confirm kari shake che.</div>`}
     <button class="btn btn-ghost" onclick="backToPacking('${o.id}')">← Back, edit qty/rate</button>
   `;
 }
