@@ -30,6 +30,8 @@ from openpyxl.utils import get_column_letter
 from datetime import date, timedelta, datetime
 from pathlib import Path
 import os
+import sys
+import time
 import json
 import urllib.request
 import urllib.error
@@ -259,19 +261,40 @@ def push_orders_to_supabase(new_orders):
 
 
 
-def push_stock_to_supabase():
+def push_stock_to_supabase(push_all=False):
     """Push ItemMast stock (Qty, rack 'location' from ItemCtg, rate) to
     Supabase -- but ONLY items whose Qty/Rate/Location actually changed
     since the last run, and at most MAX_STOCK_PUSH_PER_RUN per call so a
     huge catalog's first-time sync doesn't block order syncing (which
     needs to run every few seconds)."""
-    MAX_STOCK_PUSH_PER_RUN = 300
+    MAX_STOCK_PUSH_PER_RUN = 2000
+    STOCK_BATCH = 500          # rows per HTTP request
 
     snapshot_path = Path(os.path.dirname(os.path.abspath(__file__))) / ".stock_snapshot.json"
     try:
         snapshot = json.loads(snapshot_path.read_text()) if snapshot_path.exists() else {}
     except Exception:
         snapshot = {}
+
+    # The old snapshot was built from SitQty, i.e. 0 for everything. If it
+    # were kept, every item would compare "unchanged" against its wrong
+    # value and nothing would ever be re-pushed. Throw it away once, so
+    # the corrected numbers actually reach the phones.
+    stamp_path = Path(os.path.dirname(os.path.abspath(__file__))) / ".stock_formula"
+    FORMULA_ID = "opening+receive-issue"
+    try:
+        current_stamp = stamp_path.read_text().strip() if stamp_path.exists() else ""
+    except Exception:
+        current_stamp = ""
+    if current_stamp != FORMULA_ID:
+        if snapshot:
+            print(f"[info] Stock formula changed -- clearing the snapshot so all "
+                  f"{len(snapshot)} item(s) get re-pushed with the right number.")
+        snapshot = {}
+        try:
+            stamp_path.write_text(FORMULA_ID)
+        except Exception:
+            pass
 
     db_path = resolve_db_path()
     conn_str = (
@@ -280,8 +303,16 @@ def push_stock_to_supabase():
     )
     conn = pyodbc.connect(conn_str)
     cur = conn.cursor()
+    # STOCK = Opening + Receive - Issue.
+    #
+    # It used to read im.SitQty, which is 0 for every item in this
+    # database -- that is why every item showed "STOCK 0" on the phone.
+    # The three columns below reproduce the IN STOCK figure Value-FAS
+    # prints in its Pending Order popup exactly (checked against nine
+    # items: 1000, 1450, 1500, 250, 130, 108, 40, 470, 170).
     cur.execute("""
-        SELECT im.ItemCode, im.ItemName, im.SitQty, im.MinQty, im.SRate, ic.ICtgName
+        SELECT im.ItemCode, im.ItemName, im.Opening, im.Receive, im.Issue,
+               im.MinQty, im.SRate, ic.ICtgName
         FROM ItemMast AS im
         LEFT JOIN ItemCtg AS ic ON im.ICtgCode = ic.ICtgCode
         WHERE im.NotShow <> 'Y'
@@ -290,12 +321,12 @@ def push_stock_to_supabase():
     conn.close()
 
     url = f"{SUPABASE_URL}/rest/v1/stock"
-    pushed = 0
     checked = 0
+    pending = []          # rows that need writing, as (doc_id, item, row)
+
     for r in rows:
-        if pushed >= MAX_STOCK_PUSH_PER_RUN:
-            break  # leave the rest for the next cycle (a few seconds later) -- keeps order sync snappy
-        item_code, item_name, sit_qty, min_qty, rate, loc_name = r
+        (item_code, item_name, opening, receive, issue,
+         min_qty, rate, loc_name) = r
         if not item_code:
             continue
         checked += 1
@@ -304,32 +335,56 @@ def push_stock_to_supabase():
         item = {
             "code": code,
             "name": str(item_name or "").strip(),
-            "qty": float(sit_qty or 0),
+            "qty": float(opening or 0) + float(receive or 0) - float(issue or 0),
             "minQty": float(min_qty or 0),
             "rate": float(rate or 0),
             "location": str(loc_name).strip() if loc_name else "",
         }
         # compare against last known snapshot -- skip the write entirely
         # if nothing actually changed for this item
-        prev = snapshot.get(doc_id)
-        if prev == item:
+        if snapshot.get(doc_id) == item:
             continue
-
-        row = {
+        pending.append((doc_id, item, {
             "code": doc_id, "name": item["name"], "qty": item["qty"],
-            "min_qty": item["minQty"], "rate": item["rate"], "location": item["location"],
-        }
-        body = json.dumps(row).encode("utf-8")
-        req = urllib.request.Request(url, data=body, method="POST", headers=SB_HEADERS)
+            "min_qty": item["minQty"], "rate": item["rate"],
+            "location": item["location"],
+        }))
+
+    if not pending:
+        snapshot_path.write_text(json.dumps(snapshot))
+        print(f"[info] Stock sync: nothing changed ({checked} item(s) checked).")
+        return
+
+    # Send them in BATCHES. One HTTP request per item meant a catalogue
+    # of 8,000 items needed 8,000 round trips, which is why the cap
+    # below existed and why a corrected figure took dozens of runs to
+    # reach the phones. PostgREST takes an array, so 500 go at once.
+    limit = len(pending) if push_all else min(len(pending), MAX_STOCK_PUSH_PER_RUN)
+    todo = pending[:limit]
+    pushed = 0
+    failed = 0
+    for i in range(0, len(todo), STOCK_BATCH):
+        chunk = todo[i:i + STOCK_BATCH]
+        body = json.dumps([c[2] for c in chunk]).encode("utf-8")
+        req = urllib.request.Request(url, data=body, method="POST",
+                                     headers=SB_HEADERS)
         try:
-            urllib.request.urlopen(req, timeout=10)
-            pushed += 1
-            snapshot[doc_id] = item  # remember what we just pushed
-        except urllib.error.URLError as e:
-            print(f"[warn] Stock push failed for {item_code}: {e}")
+            urllib.request.urlopen(req, timeout=60)
+            for doc_id, item, _ in chunk:
+                snapshot[doc_id] = item      # remember what we just pushed
+            pushed += len(chunk)
+            if len(todo) > STOCK_BATCH:
+                print(f"[info]   stock {pushed}/{len(todo)}...")
+        except Exception as e:
+            failed += len(chunk)
+            print(f"[warn] Stock batch of {len(chunk)} failed: {e}")
 
     snapshot_path.write_text(json.dumps(snapshot))
-    print(f"[info] Stock sync: {pushed} changed item(s) pushed out of {checked} checked.")
+    left = len(pending) - len(todo)
+    print(f"[info] Stock sync: {pushed} item(s) pushed out of {checked} checked"
+          + (f", {failed} failed" if failed else "")
+          + (f", {left} left for the next run (use --stock-all to do them now)"
+             if left else "") + ".")
 
 
 def style_data_row(ws, r):
@@ -348,7 +403,32 @@ def style_data_row(ws, r):
 
 
 def load_or_create_workbook(output_path):
-    if os.path.exists(output_path):
+    existing = os.path.exists(output_path)
+    if existing:
+        # Orders.xlsx has gone corrupt before ("Bad CRC-32 for file
+        # 'docProps/core.xml'"), and an unreadable spreadsheet used to
+        # take the WHOLE sync down with it -- including the order and
+        # stock push, which had already worked. Move the bad file aside
+        # and start a clean one instead of crashing.
+        try:
+            wb = openpyxl.load_workbook(output_path)
+            ws = wb["Orders"]
+            return wb, ws
+        except Exception as e:
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            spoilt = f"{os.path.splitext(output_path)[0]}.corrupt-{stamp}.xlsx"
+            try:
+                os.rename(output_path, spoilt)
+                print(f"[warn] {os.path.basename(output_path)} could not be "
+                      f"opened ({type(e).__name__}: {e}).")
+                print(f"[warn] Moved it to {os.path.basename(spoilt)} and "
+                      f"started a fresh one. Nothing else was affected.")
+            except Exception as e2:
+                print(f"[error] {output_path} is unreadable AND could not be "
+                      f"moved aside: {e2}")
+                raise
+            existing = False
+    if existing:
         wb = openpyxl.load_workbook(output_path)
         ws = wb["Orders"]
     else:
@@ -384,13 +464,14 @@ def existing_keys(ws, last_row):
 
 
 def main():
-    print("[version] sync_orders.py v6 (real BillDate stored, not sync-run date)")
+    print("[version] sync_orders v7 -- stock = Opening + Receive - Issue, "
+          "batched, corrupt-xlsx safe")
     output_path = get_output_path()
     print(f"[info] Orders.xlsx will be saved to: {output_path}")
 
     new_orders = fetch_new_orders()
     push_orders_to_supabase(new_orders)
-    push_stock_to_supabase()
+    push_stock_to_supabase(push_all="--stock-all" in sys.argv)
     wb, ws = load_or_create_workbook(output_path)
 
     last_row = HEADER_ROW
