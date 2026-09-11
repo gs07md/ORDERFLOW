@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>OrderFlow — Shree Giriraj Auto Parts</title>
+<style>
+  :root{
+    --bg: #F0F2F6;
+    --bg-panel: #FFFFFF;
+    --bg-raised: #F2F4F7;
+    --line: #E1E4EA;
+    --text: #14161B;
+    --text-dim: #6B7280;
+    --navy: #101A33;
+    --navy-2: #1B2A4E;
+    --accent: #2F5FDE;
+    --accent-dim: #E8EEFD;
+    --ok: #12946A;
+    --ok-bg: #E4F6EF;
+    --bad: #D6433D;
+    --bad-bg: #FCEAEA;
+    --wait-bg: #FEF0D8;
+    --wait: #B4720F;
+    --radius: 12px;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); }
+  body{ padding-bottom:84px; min-height:100vh; }
+  h1,h2,h3{ margin:0; font-weight:600; }
+  .app-header{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+    padding:16px 16px 14px;
+    box-shadow:0 2px 10px rgba(16,26,51,.18);
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .mark{ width:34px; height:34px; border-radius:9px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-weight:700; color:#FFFFFF; font-size:15px; flex:none; border:1px solid rgba(255,255,255,.18); }
+  .brand-name{ font-size:15.5px; font-weight:600; letter-spacing:.2px; color:#FFFFFF; }
+  .brand-sub{ font-size:11.5px; color:rgba(255,255,255,.62); margin-top:1px; }
+
+  main{ padding:14px 16px 8px; max-width:640px; margin:0 auto; }
+
+  /* ---- Order list ---- */
+  .order-card{
+    background:var(--bg-panel); border:1px solid var(--line); border-left:3px solid var(--line); border-radius:var(--radius);
+    padding:14px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px;
+    cursor:pointer; box-shadow:0 1px 3px rgba(16,24,40,.05); transition:box-shadow .15s, transform .1s;
+  }
+  .order-card:active{ background:var(--bg-raised); transform:scale(.995); }
+  .order-card .no{ font-family:var(--mono); font-size:12.5px; color:var(--text-dim); letter-spacing:.1px; }
+  .order-card .title{ font-size:15px; font-weight:650; margin-top:2px; }
+  .order-card .meta{ font-size:12.5px; color:var(--text-dim); margin-top:3px; }
+  .order-card .right{ margin-left:auto; text-align:right; flex:none; }
+  .chevron{ color:var(--text-dim); font-size:18px; }
+
+  .pill{
+    display:inline-block; padding:4px 10px; border-radius:100px; font-size:11px; font-weight:650;
+    letter-spacing:.2px;
+  }
+  .pill.pending{ background:var(--wait-bg); color:var(--wait); }
+  .pill.checking{ background:var(--accent-dim); color:var(--accent); }
+  .pill.ready{ background:var(--ok-bg); color:var(--ok); }
+  .pill.billed{ background:#EDEEF0; color:var(--text-dim); }
+  .order-card:has(.pill.pending){ border-left-color:var(--wait); }
+  .order-card:has(.pill.checking){ border-left-color:var(--accent); }
+  .order-card:has(.pill.ready){ border-left-color:var(--ok); }
+  .order-card:has(.pill.billed){ border-left-color:var(--line); }
+
+  .section-label{ font-size:12px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.4px; margin:18px 2px 8px; }
+
+  /* ---- item rows (packing check) ---- */
+  .item-row{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:12px 13px; margin-bottom:9px; transition:background .15s, border-color .15s;
+    box-shadow:0 1px 3px rgba(16,24,40,.05);
+  }
+  .item-row.mismatch{ background:var(--bad-bg); border-color:#F3B9B6; }
+  .item-top{ display:flex; justify-content:space-between; gap:10px; }
+  .item-code{ font-family:var(--mono); font-size:12.5px; color:var(--accent); }
+  .item-desc{ font-size:14px; margin-top:2px; line-height:1.35; }
+  .item-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:11px; }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:10.5px; color:var(--text-dim); letter-spacing:.3px; }
+  .field .readonly{ font-family:var(--mono); font-size:14.5px; color:var(--text-dim); padding:8px 0; }
+  .field input{
+    background:var(--bg-raised); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:8px 9px; font-size:15px; font-family:var(--mono); width:100%;
+  }
+  .item-row.mismatch .field input{ border-color:var(--bad); }
+  .field input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  .field input::placeholder{ color:var(--text-dim); opacity:.55; }
+  .mismatch-tag{ font-size:10.5px; color:var(--bad); margin-top:8px; font-weight:600; }
+
+  /* ---- recheck table ---- */
+  .recheck-row{
+    display:grid; grid-template-columns: 1fr auto auto; gap:8px; align-items:center;
+    padding:10px 12px; border-bottom:1px solid var(--line); font-size:13.5px;
+  }
+  .recheck-row.mismatch{ background:var(--bad-bg); }
+  .recheck-row .desc{ line-height:1.3; }
+  .recheck-row .code{ font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+  .recheck-row .colhead{ font-size:10.5px; color:var(--text-dim); text-align:right; }
+  .recheck-row .num{ font-family:var(--mono); text-align:right; min-width:64px; }
+  .recheck-row .num.diff{ color:var(--bad); font-weight:700; }
+
+  .summary-card{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px; margin-top:14px;
+  }
+  .summary-line{ display:flex; justify-content:space-between; font-size:13.5px; padding:5px 0; color:var(--text-dim); }
+  .summary-line.total{ color:var(--text); font-weight:700; font-size:16px; border-top:1px solid var(--line); margin-top:6px; padding-top:10px; }
+  .summary-line .val{ font-family:var(--mono); }
+
+  /* ---- buttons ---- */
+  .btn{
+    display:block; width:100%; text-align:center; padding:14px; border-radius:var(--radius);
+    font-size:15px; font-weight:600; border:none; cursor:pointer; margin-top:14px;
+  }
+  .btn-primary{ background:var(--accent); color:#FFFFFF; }
+  .btn-primary:active{ opacity:.85; }
+  .btn-ghost{ background:transparent; border:1px solid var(--line); color:var(--text); }
+  .btn:disabled{ opacity:.4; }
+
+  .topbar{ display:flex; align-items:center; gap:10px; }
+  .backbtn{ background:none; border:none; color:#FFFFFF; font-size:20px; padding:2px 6px 2px 0; cursor:pointer; }
+
+  /* ---- bottom tab nav ---- */
+  nav.tabbar{
+    position:fixed; bottom:0; left:0; right:0; z-index:30;
+    background:var(--bg-panel); border-top:1px solid var(--line);
+    display:flex; padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  }
+  nav.tabbar button{
+    flex:1; background:none; border:none; color:var(--text-dim); font-size:11.5px;
+    display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 2px; cursor:pointer;
+  }
+  nav.tabbar button .ico{ font-size:19px; }
+  nav.tabbar button.active{ color:var(--accent); }
+
+  .empty{ text-align:center; color:var(--text-dim); font-size:13.5px; padding:40px 20px; }
+  .fab-note{ font-size:11.5px; color:var(--text-dim); text-align:center; margin:16px 2px 4px; line-height:1.5; }
+
+  .status-banner{
+    background:var(--wait-bg); border:1px solid #F0DFA3; color:var(--wait); font-size:11.5px;
+    border-radius:8px; padding:8px 11px; margin-bottom:14px; line-height:1.5;
+  }
+  .hidden{ display:none !important; }
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:40; display:flex; align-items:flex-end;
+  }
+  .modal{
+    background:var(--bg-panel); border-top:1px solid var(--line); border-radius:16px 16px 0 0;
+    width:100%; padding:18px 16px calc(18px + env(safe-area-inset-bottom)); max-height:80vh; overflow:auto;
+  }
+  .modal h3{ margin-bottom:12px; }
+  .modal .field{ margin-bottom:10px; }
+  .modal .field label{ margin-bottom:3px; }
+  .modal .field input{ font-family:var(--sans); font-size:14.5px; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  /* ---- role picker ---- */
+  .role-card{
+    background:var(--bg-panel); border:2px solid var(--line); border-radius:var(--radius);
+    padding:20px; margin-bottom:12px; cursor:pointer; text-align:center;
+  }
+  .role-card:active{ border-color:var(--accent); background:var(--accent-dim); }
+  .role-card .role-title{ font-size:16px; font-weight:700; margin-bottom:4px; }
+  .role-card .role-desc{ font-size:12.5px; color:var(--text-dim); }
+  .role-badge{
+    display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.3px;
+    color:#FFFFFF; background:rgba(255,255,255,.16); padding:4px 10px; border-radius:100px;
+    cursor:pointer; border:1px solid rgba(255,255,255,.2);
+  }
+  .status-chip{
+    flex:none; font-size:12px; font-weight:600; padding:7px 13px; border-radius:100px;
+    border:1px solid var(--line); cursor:pointer; white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div id="headerContent">
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div>
+        <div class="brand-name">OrderFlow</div>
+        <div class="brand-sub">Shree Giriraj Auto Parts — order → pack check → bill</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<nav class="tabbar">
+  <button data-tab="orders" class="active"><span class="ico">▤</span>Orders</button>
+</nav>
+
+<div id="modalRoot"></div>
+
+<script>
+/* =========================================================================
+   DATA LAYER -- Supabase (Postgres + REST via PostgREST).
+   Swapped from Firestore because the free Firestore tier counts every
+   single document read against a small daily quota, which a polling
+   app like this blows through in hours. Supabase's free tier has no
+   such per-read quota -- just storage/bandwidth ceilings this app is
+   nowhere close to.
+   ========================================================================= */
+const SUPABASE_URL = "https://mzzieomklvphwfwyiqjn.supabase.co";
+const SUPABASE_KEY = "sb_publishable_NUY-qCvUPIUoShzYZdaqZQ_c3z-Olco";
+const SB_HEADERS = {
+  "apikey": SUPABASE_KEY,
+  "Authorization": `Bearer ${SUPABASE_KEY}`,
+  "Content-Type": "application/json"
+};
+const FIREBASE_CONFIGURED = true; // kept as the flag name the rest of the app checks
+
+function orderToRow(o){
+  return {
+    id: o.id, order_no: o.orderNo, party: o.party, ac_code: o.acCode || null,
+    location: o.location || null, order_date: o.date, status: o.status,
+    fas_entry_started: !!o.fasEntryStarted, items: o.items
+  };
+}
+function rowToOrder(r){
+  return {
+    id: r.id, orderNo: r.order_no, party: r.party, acCode: r.ac_code,
+    location: r.location, date: r.order_date, status: r.status,
+    fasEntryStarted: r.fas_entry_started, items: r.items || []
+  };
+}
+
+async function getUser(phone){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?phone=eq.${encodeURIComponent(phone)}&select=*`, {headers: SB_HEADERS});
+    const rows = await res.json();
+    return rows[0] || null;
+  }catch(e){ console.error('getUser failed', e); return null; }
+}
+
+async function setUser(phone, role, name){
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+      method: 'POST',
+      headers: {...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates'},
+      body: JSON.stringify({phone, role, name: name || ''})
+    });
+  }catch(e){ console.error('setUser failed', e); }
+}
+
+async function listUsers(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?select=*`, {headers: SB_HEADERS});
+    return await res.json();
+  }catch(e){ console.error('listUsers failed', e); return []; }
+}
+
+async function anyUsersExist(){
+  const users = await listUsers();
+  return users.length > 0;
+}
+
+const DB = {
+  load(){
+    const raw = localStorage.getItem('orderflow_orders_v2');
+    if(raw) return JSON.parse(raw);
+    return [];
+  },
+  save(orders){
+    localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
+    if(FIREBASE_CONFIGURED) pushAllToSupabase(orders);
+  }
+};
+
+async function pushAllToSupabase(orders){
+  for(const order of orders){
+    try{
+      await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+        method: 'POST',
+        headers: {...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates'},
+        body: JSON.stringify(orderToRow(order))
+      });
+    }catch(e){ console.error('supabase push failed', order.id, e); }
+  }
+}
+
+async function pullFromSupabase(){
+  if(!FIREBASE_CONFIGURED) return null;
+  try{
+    const today = new Date().toISOString().slice(0,10);
+    // Filter by today's date server-side -- cheaper and faster than
+    // pulling every historical order and filtering in the browser.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_date=eq.${today}&select=*`, {headers: SB_HEADERS});
+    const rows = await res.json();
+    if(!Array.isArray(rows)) return null;
+    return rows.map(rowToOrder);
+  }catch(e){ console.error('supabase pull failed', e); return null; }
+}
+
+// Poll for changes from other devices (Value-FAS sync script, other phones)
+function startLiveSync(){
+  if(!FIREBASE_CONFIGURED) return;
+  setInterval(async ()=>{
+    const remote = await pullFromSupabase();
+    // Refresh stock (item location, qty, rate) on the SAME cycle as
+    // orders -- so location data is never more stale than the orders
+    // themselves. Runs alongside the order pull, not gated behind the
+    // old 15-min cache.
+    fetchAllStock().then(fresh => {
+      stockCache = fresh;
+      try{ localStorage.setItem('orderflow_stock_cache', JSON.stringify({ts: Date.now(), data: fresh})); }catch(e){}
+    }).catch(()=>{});
+    if(remote === null) return;
+    // Supabase is the source of truth. Replace local orders with the
+    // remote list every poll (so deletions/cleanups on the server side
+    // actually take effect on every phone) -- except the ONE order the
+    // person currently has open, which is kept local so a background
+    // poll never clobbers input they're actively typing.
+    const newOrders = remote.map(r => (r.id === currentOrderId
+      ? (orders.find(o => o.id === r.id) || r)
+      : r));
+    orders = newOrders;
+    localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
+    if(!currentOrderId) render();
+  }, 3000);
+}
+
+function seedData(){
+  const orders = [
+    {
+      id: 'ord1',
+      orderNo: 'C-031',
+      party: 'Retail Counter',
+      date: '2026-09-02',
+      status: 'pending', // pending -> checking -> ready -> billed
+      items: [
+        {code:'24681', desc:'bos-4-T OIL 10W/30 800ML w/o copan', oqty:30, mrp:454, aqty:null, arate:null},
+        {code:'UMC-001A', desc:'IF-SUP SPL CHAIN KIT', oqty:1, mrp:730, aqty:null, arate:null},
+        {code:'1487B', desc:'KICK LEVER SPL/PASSION', oqty:5, mrp:340, aqty:null, arate:null},
+        {code:'2217A', desc:'LINK BUSH SET STEEL/BOLT ACTIVA-O/M', oqty:10, mrp:172, aqty:null, arate:null},
+        {code:'X150', desc:'MX-ACTIVA N/M ACC CABLE MAESTRO', oqty:10, mrp:258, aqty:null, arate:null},
+        {code:'X648', desc:'MX-PUL-UG3-DIJ CLUTCH CABLE 150/180/DIS', oqty:10, mrp:150, aqty:null, arate:null},
+        {code:'X7106', desc:'MX-FACINO ACC CABLE ALPHA/RAY-ZR/ALPH', oqty:5, mrp:281, aqty:null, arate:null},
+      ]
+    },
+    {
+      id: 'ord2',
+      orderNo: 'R-207',
+      party: 'Battery Parcel',
+      date: '2026-09-02',
+      status: 'pending',
+      items: [
+        {code:'SAP-0195', desc:'FUSE BOX ASSY = HH', oqty:100, mrp:26.52, aqty:null, arate:null},
+        {code:'X651', desc:'MX-SUP-SPL ACC CABLE SPL/PAS-PRO', oqty:10, mrp:45.77, aqty:null, arate:null},
+        {code:'X735', desc:'MX-SPL ACC CABLE', oqty:10, mrp:47.63, aqty:null, arate:null},
+        {code:'X736', desc:'MX-SPL CLUTCH CABLE', oqty:10, mrp:57.44, aqty:null, arate:null},
+      ]
+    }
+  ];
+  DB.save(orders);
+  return orders;
+}
+
+let orders = DB.load();
+let currentOrderId = null;
+let activeTab = 'orders';
+let currentRole = localStorage.getItem('orderflow_role') || null; // 'ceo' | 'dispatcher' | 'picker'
+if(currentRole && !['ceo','dispatcher','picker'].includes(currentRole)){
+  // Stale value from an older version of the app (e.g. old PIN system's
+  // 'full') -- force a clean re-login instead of misreading it.
+  currentRole = null;
+  localStorage.removeItem('orderflow_role');
+}
+let currentPhone = localStorage.getItem('orderflow_phone') || null;
+let currentName = localStorage.getItem('orderflow_name') || '';
+
+const main = document.getElementById('main');
+const tabbar = document.querySelector('nav.tabbar');
+const modalRoot = document.getElementById('modalRoot');
+
+function fmt(n){
+  if(n===null || n===undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function statusLabel(s){
+  return {pending:'Pending Check', checking:'In Packing', ready:'Ready to Bill', billed:'Billed'}[s] || s;
+}
+function statusPillClass(s){
+  return {pending:'pending', checking:'checking', ready:'ready', billed:'billed'}[s] || 'pending';
+}
+
+/* -------- routing -------- */
+tabbar.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-tab]');
+  if(!btn) return;
+  activeTab = btn.dataset.tab;
+  currentOrderId = null;
+  [...tabbar.children].forEach(b=>b.classList.toggle('active', b===btn));
+  render();
+});
+
+function goToOrder(id){
+  currentOrderId = id;
+  pickerIdx = 0;
+  render();
+}
+
+function render(){
+  if(!currentRole){
+    renderPhoneLogin();
+    return;
+  }
+  if(currentOrderId){
+    renderOrderDetail(currentOrderId);
+  } else if(activeTab === 'users'){
+    renderManageUsers();
+  } else {
+    renderOrderList();
+  }
+}
+
+function renderPhoneLogin(){
+  document.getElementById('headerContent').innerHTML = `
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div>
+        <div class="brand-name">OrderFlow</div>
+        <div class="brand-sub">Shree Giriraj Auto Parts</div>
+      </div>
+    </div>`;
+  main.innerHTML = `
+    <div class="section-label">Tamaro mobile number nakho</div>
+    <div class="field" style="max-width:320px;">
+      <input id="login-phone" inputmode="numeric" placeholder="98765 43210" style="font-size:18px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-panel);">
+    </div>
+    <div class="section-label">Tamaru naam nakho</div>
+    <div class="field" style="max-width:320px;">
+      <input id="login-name" placeholder="Jem Ramesh Bhai" style="font-size:16px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-panel);">
+    </div>
+    <button class="btn btn-primary" style="max-width:320px;" onclick="doPhoneLogin()">Login</button>
+    <div class="fab-note">Nava number ne CEO j role assign kari shake che (Manage Users thi).</div>
+  `;
+}
+
+async function doPhoneLogin(){
+  const raw = document.getElementById('login-phone').value.trim();
+  const nameInput = document.getElementById('login-name').value.trim();
+  const phone = raw.replace(/\D/g, '');
+  if(phone.length < 10){ alert('Sahi 10-digit mobile number nakho'); return; }
+
+  const existing = await getUser(phone);
+  if(existing){
+    currentRole = existing.role;
+    currentPhone = phone;
+    currentName = nameInput || existing.name || '';
+    if(nameInput && nameInput !== existing.name) await setUser(phone, existing.role, nameInput);
+  } else {
+    const noUsersYet = !(await anyUsersExist());
+    if(noUsersYet){
+      // Bootstrap: the very first person to log in becomes CEO.
+      await setUser(phone, 'ceo', nameInput);
+      currentRole = 'ceo';
+      currentPhone = phone;
+      currentName = nameInput;
+    } else {
+      alert('Aa number register nathi thayu. CEO ne kaho tamne "Manage Users" thi umerva mate.');
+      return;
+    }
+  }
+  localStorage.setItem('orderflow_role', currentRole);
+  localStorage.setItem('orderflow_phone', currentPhone);
+  localStorage.setItem('orderflow_name', currentName);
+  render();
+}
+
+function switchRole(){
+  currentRole = null;
+  currentPhone = null;
+  localStorage.removeItem('orderflow_role');
+  localStorage.removeItem('orderflow_phone');
+  currentOrderId = null;
+  activeTab = 'orders';
+  render();
+}
+
+/* -------- CEO: Manage Users -------- */
+async function renderManageUsers(){
+  document.getElementById('headerContent').innerHTML = `
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div style="flex:1;">
+        <div class="brand-name">Manage Users</div>
+        <div class="brand-sub">CEO j role assign kari shake che</div>
+      </div>
+      <span class="role-badge" onclick="switchRole()">LOGOUT ⇄</span>
+    </div>`;
+  main.innerHTML = `<div class="empty">Loading...</div>`;
+  const users = await listUsers();
+  const rows = users.map(u => `
+    <div class="order-card" style="cursor:default;">
+      <div>
+        <div class="no">${u.phone}</div>
+        <div class="title">${u.name || '(no name)'}</div>
+      </div>
+      <div class="right">
+        <select onchange="changeUserRole('${u.phone}', this.value)" style="padding:6px 8px; border-radius:8px; border:1px solid var(--line);">
+          <option value="ceo" ${u.role==='ceo'?'selected':''}>CEO</option>
+          <option value="dispatcher" ${u.role==='dispatcher'?'selected':''}>Dispatcher</option>
+          <option value="picker" ${u.role==='picker'?'selected':''}>Picker</option>
+        </select>
+      </div>
+    </div>`).join('');
+  main.innerHTML = `
+    <div class="section-label">Registered numbers</div>
+    ${rows || '<div class="empty">Koi user nathi</div>'}
+    <div class="section-label">Navo number umero</div>
+    <div class="field"><input id="new-user-phone" placeholder="98765 43210" style="padding:10px; border:1px solid var(--line); border-radius:8px;"></div>
+    <div class="field" style="margin-top:8px;">
+      <select id="new-user-role" style="padding:10px; border:1px solid var(--line); border-radius:8px;">
+        <option value="dispatcher">Dispatcher</option>
+        <option value="picker">Picker</option>
+        <option value="ceo">CEO</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="addNewUser()">Umero</button>
+  `;
+}
+
+async function changeUserRole(phone, role){
+  await setUser(phone, role);
+  renderManageUsers();
+}
+
+async function addNewUser(){
+  const raw = document.getElementById('new-user-phone').value.trim();
+  const phone = raw.replace(/\D/g, '');
+  const role = document.getElementById('new-user-role').value;
+  if(phone.length < 10){ alert('Sahi 10-digit number nakho'); return; }
+  await setUser(phone, role);
+  renderManageUsers();
+}
+
+/* -------- Live Stock -------- */
+let stockCache = null;
+
+async function fetchAllStock(){
+  let all = [];
+  let from = 0;
+  const pageSize = 1000;
+  while(true){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/stock?select=*`, {
+      headers: {...SB_HEADERS, 'Range': `${from}-${from + pageSize - 1}`}
+    });
+    const rows = await res.json();
+    if(!Array.isArray(rows) || rows.length === 0) break;
+    all.push(...rows.map(r => ({code: r.code, name: r.name, qty: r.qty, rate: r.rate, minQty: r.min_qty, location: r.location})));
+    if(rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
+async function renderStockView(){
+  document.getElementById('headerContent').innerHTML = `
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div style="flex:1;">
+        <div class="brand-name">Live Stock</div>
+        <div class="brand-sub">Value-FAS thi live — har ${10} minute e update</div>
+      </div>
+      <span class="role-badge" onclick="switchRole()">${currentRole==='picker'?'PICKER':currentRole==='ceo'?'CEO':'DISPATCHER'} ⇄</span>
+    </div>`;
+
+  main.innerHTML = `
+    <div class="field" style="margin-bottom:12px;">
+      <input id="stock-search" placeholder="Code ya naam search karo..." oninput="filterStock()"
+        style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
+    </div>
+    <div id="stock-list"><div class="empty">Loading...</div></div>
+  `;
+
+  if(!stockCache){
+    stockCache = await fetchAllStock();
+  }
+  filterStock();
+}
+
+function filterStock(){
+  const q = (document.getElementById('stock-search')?.value || '').trim().toLowerCase();
+  const list = document.getElementById('stock-list');
+  if(!stockCache){ list.innerHTML = `<div class="empty">Loading...</div>`; return; }
+
+  let items = stockCache;
+  if(q){
+    items = items.filter(it => (it.code||'').toLowerCase().includes(q) || (it.name||'').toLowerCase().includes(q));
+  }
+  items = items.slice(0, 100); // cap render for performance
+
+  if(items.length === 0){
+    list.innerHTML = `<div class="empty">Koi item na malyu.</div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(it => {
+    const low = Number(it.qty) <= Number(it.minQty) && Number(it.minQty) > 0;
+    return `
+      <div class="item-row ${low?'mismatch':''}">
+        <div class="item-top">
+          <div>
+            <div class="item-code">${it.code}</div>
+            <div class="item-desc">${it.name}</div>
+          </div>
+        </div>
+        <div class="item-grid">
+          <div class="field">
+            <label>QTY</label>
+            <div class="readonly" style="font-weight:700; ${low?'color:var(--bad);':''}">${fmt(it.qty)}</div>
+          </div>
+          <div class="field">
+            <label>LOCATION</label>
+            <div class="readonly">${it.location || '—'}</div>
+          </div>
+          <div class="field">
+            <label>RATE</label>
+            <div class="readonly">₹ ${fmt(it.rate)}</div>
+          </div>
+          <div class="field">
+            <label>MIN QTY</label>
+            <div class="readonly">${fmt(it.minQty)}</div>
+          </div>
+        </div>
+        ${low ? `<div class="mismatch-tag">⚠ Stock Min Qty thi ochu che</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+
+/* -------- Orders list -------- */
+function renderOrderList(){
+  document.getElementById('headerContent').innerHTML = `
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div style="flex:1;">
+        <div class="brand-name">OrderFlow</div>
+        <div class="brand-sub">Shree Giriraj Auto Parts — order → pack check → bill</div>
+      </div>
+      <span class="role-badge" onclick="switchRole()">${currentRole==='picker'?'PICKER':currentRole==='ceo'?'CEO':'DISPATCHER'} ⇄</span>
+    </div>`;
+
+  if(currentRole === 'ceo'){
+    tabbar.querySelector('[data-tab="users"]')?.remove();
+    const usersBtn = document.createElement('button');
+    usersBtn.dataset.tab = 'users';
+    usersBtn.innerHTML = '<span class="ico">⚙</span>Manage Users';
+    tabbar.insertBefore(usersBtn, tabbar.lastElementChild.nextSibling);
+  }
+
+  if(orders.length === 0){
+    main.innerHTML = `<div class="empty">Koi order nathi. Value-FAS ma navi order banavta j apoap aavi jashe.</div>`;
+    return;
+  }
+
+  const isCeo = currentRole === 'ceo';
+  const rows = orders.map(o=>{
+    const total = o.items.length;
+    const mismatches = o.items.filter(it => it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp))).length;
+    const showCheckbox = isCeo && o.status === 'ready';
+    return `
+      <div class="order-card" data-status="${o.status}" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')+' '+o.items.map(it=>it.code).join(' ')).toLowerCase()}" onclick="goToOrder('${o.id}')">
+        ${showCheckbox ? `<input type="checkbox" class="batch-bill-check" data-order-id="${o.id}" onclick="event.stopPropagation(); updateBatchBillBar();" style="width:20px; height:20px; flex:none; margin-right:2px;">` : ''}
+        <div>
+          <div class="no">${o.orderNo}${o.location ? ' · '+o.location : ''}${o.date ? ' · '+o.date : ''}</div>
+          <div class="title">${o.party}</div>
+          <div class="meta">${total} item${total>1?'s':''}${(!currentRole || currentRole!=='picker') && mismatches ? ' · '+mismatches+' mismatch'+(mismatches>1?'es':'') : ''}</div>
+        </div>
+        <div class="right">
+          <span class="pill ${statusPillClass(o.status)}">${statusLabel(o.status)}</span>
+        </div>
+        <div class="chevron">›</div>
+      </div>`;
+  }).join('');
+
+  const statusCounts = {pending:0, checking:0, ready:0, billed:0};
+  orders.forEach(o => { if(statusCounts[o.status]!==undefined) statusCounts[o.status]++; });
+  const filterChips = ['all','pending','checking','ready','billed'].map(s => {
+    const label = s==='all' ? `All (${orders.length})` : `${statusLabel(s)} (${statusCounts[s]||0})`;
+    return `<button class="status-chip" data-status-filter="${s}" onclick="setOrderStatusFilter('${s}')">${label}</button>`;
+  }).join('');
+
+  main.innerHTML = `
+    <div class="field" style="margin-bottom:10px;">
+      <input id="order-search" placeholder="Order no, party, location ya item code search karo..." oninput="filterOrderList()"
+        style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
+    </div>
+    <div id="status-chip-row" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px;">${filterChips}</div>
+    ${isCeo ? `<div id="batch-bill-bar" class="hidden" style="display:none; align-items:center; gap:10px; background:var(--accent-dim); border-radius:8px; padding:10px 12px; margin-bottom:12px;">
+      <span id="batch-bill-count" style="font-size:13px; font-weight:600; color:var(--accent);">0 order pasand karya</span>
+      <button class="btn btn-primary" style="margin:0; width:auto; padding:8px 16px;" onclick="generateBatchBills()">Badha na Bill Banavo</button>
+    </div>` : ''}
+    <div class="section-label">Today's orders</div>
+    <div id="order-list-rows">${rows}</div>
+    <div class="fab-note">Order Value-FAS mathi manually umervi pade che abhi. Sync script connect thay pachi automatic aavse.</div>`;
+  updateStatusChipStyles();
+}
+
+function updateBatchBillBar(){
+  const bar = document.getElementById('batch-bill-bar');
+  if(!bar) return;
+  const checked = document.querySelectorAll('.batch-bill-check:checked').length;
+  bar.style.display = checked > 0 ? 'flex' : 'none';
+  const countEl = document.getElementById('batch-bill-count');
+  if(countEl) countEl.textContent = `${checked} order pasand karya`;
+}
+
+function generateBatchBills(){
+  const ids = [...document.querySelectorAll('.batch-bill-check:checked')].map(c => c.dataset.orderId);
+  if(ids.length === 0) return;
+  if(!confirm(`${ids.length} order na bill ek sathe banavva che?`)) return;
+  ids.forEach(id => {
+    const o = orders.find(x => x.id === id);
+    if(o && o.status === 'ready'){
+      o.status = 'billed';
+      o.billedAt = new Date().toISOString();
+    }
+  });
+  DB.save(orders);
+  render();
+}
+
+let orderStatusFilter = 'all';
+function setOrderStatusFilter(s){
+  orderStatusFilter = s;
+  updateStatusChipStyles();
+  filterOrderList();
+}
+function updateStatusChipStyles(){
+  document.querySelectorAll('.status-chip').forEach(btn => {
+    const active = btn.dataset.statusFilter === orderStatusFilter;
+    btn.style.background = active ? 'var(--accent)' : 'var(--bg-raised)';
+    btn.style.color = active ? '#FFFFFF' : 'var(--text)';
+  });
+}
+
+function filterOrderList(){
+  const q = (document.getElementById('order-search')?.value || '').trim().toLowerCase();
+  const cards = document.querySelectorAll('#order-list-rows .order-card');
+  let visibleCount = 0;
+  cards.forEach(c => {
+    const matchesText = !q || c.dataset.search.includes(q);
+    const matchesStatus = orderStatusFilter === 'all' || c.dataset.status === orderStatusFilter;
+    const match = matchesText && matchesStatus;
+    c.style.display = match ? '' : 'none';
+    if(match) visibleCount++;
+  });
+  let noResultEl = document.getElementById('order-search-noresult');
+  if(visibleCount === 0){
+    if(!noResultEl){
+      noResultEl = document.createElement('div');
+      noResultEl.id = 'order-search-noresult';
+      noResultEl.className = 'empty';
+      noResultEl.textContent = 'Koi order na malyu.';
+      document.getElementById('order-list-rows').appendChild(noResultEl);
+    }
+  } else if(noResultEl){
+    noResultEl.remove();
+  }
+}
+
+/* -------- Order detail: packing check + recheck -------- */
+function renderOrderDetail(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o){ currentOrderId=null; render(); return; }
+
+  document.getElementById('headerContent').innerHTML = `
+    <div class="topbar">
+      <button class="backbtn" onclick="goToOrder(null)">←</button>
+      <div style="flex:1;">
+        <div class="brand-name">${o.orderNo} — ${o.party}</div>
+        <div class="brand-sub">${o.location ? o.location+' · ' : ''}${statusLabel(o.status)}</div>
+      </div>
+    </div>`;
+
+  if(currentRole === 'picker'){
+    // Picker only ever does blind packing entry. Once submitted, nothing
+    // more to see here — ordered qty, mismatch and billing stay hidden.
+    if(o.status === 'pending' || o.status === 'checking'){
+      renderPackingCheck(o);
+    } else {
+      main.innerHTML = `<div class="empty">✓ Aa order submit thai gayu che. Dispatcher check karshe.</div>`;
+    }
+    return;
+  }
+
+  if(o.status === 'billed'){
+    renderFinalBill(o);
+    return;
+  }
+  if(o.status === 'ready'){
+    renderRecheck(o);
+    return;
+  }
+  renderPackingCheck(o);
+}
+
+let pickerIdx = 0; // which item index the picker is currently on
+
+function renderPackingCheck(o){
+  const blind = currentRole === 'picker';
+
+  if(blind){
+    renderPickerSingleItem(o);
+    return;
+  }
+
+  // Full view (CEO/Dispatcher): all items, each with a done/pending badge
+  // and who picked it, so nobody has to guess what's finished. Sorted by
+  // rack location so items are grouped in walking order.
+  const sortedIdxs = locationSortedIndices(o);
+  const rows = sortedIdxs.map((idx, srNo)=>{
+    const it = o.items[idx];
+    const aq = it.aqty !== null ? it.aqty : '';
+    const ar = it.arate !== null ? it.arate : '';
+    const mismatch = it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp));
+    const done = it.aqty !== null && it.aqty !== undefined;
+    const stk = stockLookup(it.code);
+    return `
+      <div class="item-row ${mismatch?'mismatch':''}" id="row-${idx}" data-search="${(it.code+' '+it.desc).toLowerCase()}">
+        <div class="item-top">
+          <div>
+            <div class="item-code">${srNo+1}. ${it.code} <span style="color:${done?'var(--ok)':'var(--bad)'}; font-weight:700;">${done?'✓':'✗'}</span></div>
+            <div class="item-desc">${it.desc}</div>
+            ${stk ? `<div class="fab-note" style="margin:4px 0 0; text-align:left; color:var(--accent);">📍 Location: ${stk.location || '—'}</div>` : ''}
+            ${done && it.pickedBy ? `<div class="fab-note" style="margin:2px 0 0; text-align:left;">Kadhyu: ${it.pickedBy}</div>` : ''}
+          </div>
+        </div>
+        <div class="item-grid">
+          <div class="field">
+            <label>ORDERED QTY</label>
+            <div class="readonly">${it.oqty}</div>
+          </div>
+          <div class="field">
+            <label>MRP / RATE</label>
+            <div class="readonly">${fmt(it.mrp)}</div>
+          </div>
+          <div class="field">
+            <label>ACTUAL QTY</label>
+            <input inputmode="decimal" placeholder="${it.oqty}" value="${aq}" oninput="updateItem('${o.id}', ${idx}, 'aqty', this.value)">
+          </div>
+          <div class="field">
+            <label>ACTUAL RATE</label>
+            <input inputmode="decimal" placeholder="${it.mrp}" value="${ar}" oninput="updateItem('${o.id}', ${idx}, 'arate', this.value)">
+          </div>
+        </div>
+        <div class="mismatch-tag ${mismatch ? '' : 'hidden'}" id="tag-${idx}">⚠ Ordered thi alag che — check karo</div>
+      </div>`;
+  }).join('');
+
+  main.innerHTML = `
+    <div class="field" style="margin-bottom:12px;">
+      <input id="item-search" placeholder="Item code ya naam search karo..." oninput="filterItemRows()"
+        style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
+    </div>
+    <div class="status-banner">Har item ni Actual Qty ane Actual Rate bharo. Khali rakhso to Ordered value j use thashe. Farak hoy to row lal thai jashe. ✓/✗ batave che picker e kaam puru karyu ke nahi.</div>
+    <div id="item-rows-container">${rows}</div>
+    <button class="btn btn-primary" onclick="finishPacking('${o.id}')">Packing Done → Recheck</button>
+  `;
+}
+
+function filterItemRows(){
+  const q = (document.getElementById('item-search')?.value || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#item-rows-container .item-row');
+  rows.forEach(r => {
+    r.style.display = (!q || r.dataset.search.includes(q)) ? '' : 'none';
+  });
+}
+
+function renderPickerSingleItem(o){
+  const sortedIdxs = locationSortedIndices(o);
+  // clamp to first not-done item (in location order) so a picker never re-does a finished one
+  while(pickerIdx < sortedIdxs.length && o.items[sortedIdxs[pickerIdx]].done) pickerIdx++;
+
+  if(pickerIdx >= sortedIdxs.length){
+    // everything done -- submit and hand off to dispatcher
+    main.innerHTML = `<div class="empty">✓ Badha item puru thai gaya. Submit thai rahyu che...</div>`;
+    finishPacking(o.id);
+    return;
+  }
+
+  const realIdx = sortedIdxs[pickerIdx];
+  const it = o.items[realIdx];
+  const total = sortedIdxs.length;
+  const stk = stockLookup(it.code);
+  main.innerHTML = `
+    <div class="status-banner">Item ${pickerIdx+1} of ${total} — Ordered Qty joi ne Actual Qty/Rate bharo.</div>
+    <div class="item-row" id="row-${realIdx}">
+      <div class="item-top">
+        <div>
+          <div class="item-code">${it.code}</div>
+          <div class="item-desc">${it.desc}</div>
+          ${stk ? `<div class="fab-note" style="margin:4px 0 0; text-align:left; color:var(--accent);">📍 Location: ${stk.location || '—'}</div>` : ''}
+        </div>
+      </div>
+      <div class="item-grid">
+        <div class="field">
+          <label>ORDERED QTY</label>
+          <div class="readonly">${it.oqty}</div>
+        </div>
+        <div class="field">
+          <label>MRP / RATE</label>
+          <div class="readonly">${fmt(it.mrp)}</div>
+        </div>
+        <div class="field">
+          <label>ACTUAL QTY</label>
+          <input id="picker-qty" inputmode="decimal" placeholder="${it.oqty}">
+        </div>
+        <div class="field">
+          <label>ACTUAL RATE</label>
+          <input id="picker-rate" inputmode="decimal" placeholder="${it.mrp}">
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="confirmPickerItem('${o.id}', ${realIdx})">✓ Aa Item Thai Gayu — Next</button>
+  `;
+}
+
+function confirmPickerItem(orderId, idx){
+  const o = orders.find(x=>x.id===orderId);
+  const it = o.items[idx];
+  const qtyVal = document.getElementById('picker-qty').value;
+  const rateVal = document.getElementById('picker-rate').value;
+  it.aqty = qtyVal === '' ? it.oqty : Number(qtyVal);
+  it.arate = rateVal === '' ? it.mrp : Number(rateVal);
+  it.done = true;
+  it.pickedBy = currentName || currentPhone || 'Picker';
+  if(o.status === 'pending') o.status = 'checking';
+  DB.save(orders);
+  pickerIdx++;
+  render();
+}
+
+function updateItem(orderId, idx, field, value){
+  const o = orders.find(x=>x.id===orderId);
+  o.items[idx][field] = value === '' ? null : Number(value);
+  if(o.status === 'pending') o.status = 'checking';
+  DB.save(orders);
+  const it = o.items[idx];
+  const mismatch = it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp));
+  const rowEl = document.getElementById(`row-${idx}`);
+  const tagEl = document.getElementById(`tag-${idx}`);
+  if(rowEl) rowEl.classList.toggle('mismatch', mismatch);
+  if(tagEl) tagEl.classList.toggle('hidden', !mismatch);
+}
+
+function finishPacking(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  // fill blanks with ordered values
+  o.items.forEach(it=>{
+    if(it.aqty===null) it.aqty = it.oqty;
+    if(it.arate===null) it.arate = it.mrp;
+  });
+  o.status = 'ready';
+  DB.save(orders);
+  render();
+}
+
+function renderRecheck(o){
+  const rows = o.items.map(it=>{
+    const qtyMismatch = Number(it.aqty) !== Number(it.oqty);
+    const rateMismatch = Number(it.arate) !== Number(it.mrp);
+    const mismatch = qtyMismatch || rateMismatch;
+    return `
+      <div class="recheck-row ${mismatch?'mismatch':''}">
+        <div class="desc">${it.desc}<div class="code">${it.code}</div></div>
+        <div>
+          <div class="colhead">QTY</div>
+          <div class="num ${qtyMismatch?'diff':''}">${it.oqty} → ${it.aqty}</div>
+        </div>
+        <div>
+          <div class="colhead">RATE</div>
+          <div class="num ${rateMismatch?'diff':''}">${fmt(it.mrp)} → ${fmt(it.arate)}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const total = o.items.reduce((s,it)=>s + Number(it.aqty)*Number(it.arate), 0);
+  const mismatchCount = o.items.filter(it=>Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp)).length;
+
+  main.innerHTML = `
+    <div class="status-banner">${mismatchCount ? '⚠ '+mismatchCount+' item ma Ordered ane Actual alag che — bill banavta pehla ek var joi levu.' : '✓ Badha item Ordered mujab j che.'}</div>
+    ${rows}
+    <div class="summary-card">
+      <div class="summary-line total"><span>Final Bill Amount</span><span class="val">₹ ${fmt(total)}</span></div>
+    </div>
+    ${currentRole === 'ceo'
+      ? `<button class="btn btn-primary" onclick="confirmBill('${o.id}')">Confirm &amp; Generate Bill</button>`
+      : `<div class="fab-note">Matra CEO j bill confirm kari shake che.</div>`}
+    <button class="btn btn-ghost" onclick="backToPacking('${o.id}')">← Back, edit qty/rate</button>
+  `;
+}
+
+function backToPacking(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  o.status = 'checking';
+  DB.save(orders);
+  render();
+}
+
+function confirmBill(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  o.status = 'billed';
+  o.billedAt = new Date().toISOString();
+  DB.save(orders);
+  render();
+}
+
+function renderFinalBill(o){
+  const rows = o.items.map(it=>`
+    <div class="recheck-row">
+      <div class="desc">${it.desc}<div class="code">${it.code}</div></div>
+      <div><div class="colhead">QTY</div><div class="num">${it.aqty}</div></div>
+      <div><div class="colhead">AMOUNT</div><div class="num">${fmt(it.aqty*it.arate)}</div></div>
+    </div>`).join('');
+  const total = o.items.reduce((s,it)=>s + Number(it.aqty)*Number(it.arate), 0);
+
+  main.innerHTML = `
+    <div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ Bill confirmed. Value-FAS ma final entry mate ready.</div>
+    ${rows}
+    <div class="summary-card">
+      <div class="summary-line total"><span>Net Amount</span><span class="val">₹ ${fmt(total)}</span></div>
+    </div>
+    ${currentRole==='ceo' ? `<button class="btn btn-ghost" onclick="resetToPending('${o.id}')">↺ Reset to Pending (galti thi Billed thayu hoy to)</button>` : ''}
+  `;
+}
+
+function resetToPending(orderId){
+  if(!confirm('Aa order pacho "Pending" ma levo che? Value-FAS ma bill banavyu hoy to e alag thi delete karvu padse.')) return;
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  o.status = 'pending';
+  o.fasEntryStarted = false;
+  DB.save(orders);
+  currentOrderId = null;
+  render();
+}
+
+/* -------- Add order manually removed: all orders now come
+   automatically from Value-FAS via the sync script. -------- */
+
+async function syncNowOnLoad(){
+  if(!FIREBASE_CONFIGURED || !currentRole) return;
+  const remote = await pullFromSupabase();
+  if(remote === null) return;
+  orders = remote;
+  localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
+  if(!currentOrderId) render();
+}
+
+function locationSortedIndices(o){
+  // Sort item indices by rack Location (stock lookup) so a picker walks
+  // the warehouse in order instead of jumping around. Items with no
+  // known location sort to the end.
+  const idxs = o.items.map((_, i) => i);
+  idxs.sort((a, b) => {
+    const la = stockLookup(o.items[a].code)?.location || '';
+    const lb = stockLookup(o.items[b].code)?.location || '';
+    if(!la && !lb) return a - b;
+    if(!la) return 1;
+    if(!lb) return -1;
+    return la.localeCompare(lb);
+  });
+  return idxs;
+}
+
+function stockLookup(code){
+  if(!stockCache) return null;
+  return stockCache.find(s => s.code === code) || null;
+}
+
+async function preloadStock(){
+  if(stockCache) return;
+  // Cache in localStorage for 15 min -- the stock catalog can be
+  // thousands of docs, and re-fetching all of it on every single page
+  // load across every phone is what burns through the Firestore free
+  // read quota in a single afternoon.
+  const CACHE_KEY = 'orderflow_stock_cache';
+  const CACHE_MS = 2 * 60 * 1000;
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(Date.now() - parsed.ts < CACHE_MS){
+        stockCache = parsed.data;
+        return;
+      }
+    }
+  }catch(e){}
+  stockCache = await fetchAllStock();
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts: Date.now(), data: stockCache})); }catch(e){}
+}
+
+render();
+syncNowOnLoad();
+preloadStock();
+startLiveSync();
+</script>
+</body>
+</html>
