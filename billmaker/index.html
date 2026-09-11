@@ -49,6 +49,8 @@ input[type=date]{padding:10px;background:#fff;color:#2c333b;border:1px solid #d7
 .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-left:7px;vertical-align:middle;flex:none;white-space:nowrap;}
 .b-sent{background:#d9f0e0;color:#1f7a39;}
 .b-nophone{background:#f8dcd9;color:#c33a32;}
+.b-making{background:#fdf0d5;color:#9a6b00;}
+.row.making{background:#fffdf6;}
 .edit{font-size:11.5px;font-weight:600;color:#2c333b;background:#fff;border:1px solid #d7dde2;border-radius:7px;padding:5px 10px;margin-left:7px;flex:0 0 auto;cursor:pointer;font-family:inherit;}
 .edit:active{background:#eef1f4;}
 .foot{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-top:1px solid #e6eaee;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
@@ -66,7 +68,7 @@ input[type=date]{padding:10px;background:#fff;color:#2c333b;border:1px solid #d7
 </style>
 </head><body>
 <div class="wrap">
-<h1><img class="logo" src="icon-192.png" alt="" onerror="this.remove()">Bill Maker</h1>
+<h1><img class="logo" src="data:image/webp;base64,UklGRoYSAABXRUJQVlA4WAoAAAAwAAAATwAATwAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZBTFBI7gcAAAHwhW3bIUna/p13pDO7y9U2qgdtj9oc257mWG3bHtu2bbPadpddT2anIq5rIe/7jsicxWclIiYA/1foLerizjjDFwwGvcKhbouGj1rWNXNcLYbd9djnOw6dKCk5uAiAK99lx7O8X8dQh/nuTJnwTa3J6tkA2pV8MeNUr1bLiUvvvHvT1CYZIASA+cSa1nUAxiWZY7/ckaVRcMukixZNvDeYNtFyyZkAOsV0YgMAzCJmZqqYV6gwZnbwBNrNMtIVmlPDLwDAJzp1+QAeZjlV3B+QIHfm/Q9Ma4L0irF7iLmqEMB1psZeD4AvFMw0WwYYBtIcejTBzGxNBRCq0PgSgFGhkRiiSvupvxBL/zAArNZYC6BFVGN7IFOGHmNltCeAASdVEwAMTmgsQGaK82tYTRsAuH9XmMMB3GypGtvLRLrOD7NueQjAVJKFOwBYzepHDYkoGmqk576YlnkxgDbVssMhAB+qIl2R6p5wJHJ5enBpjQ6/D0C8JvvGAMR+BW0yUlq+YzGXd08Pem7XibcHMMqSPA4gGFWUFgDAiOOc+ne+U66BAgAKPiAVTQfQZJdkJoBeloyuBeCeHGMpfSAcGhfZ6AcA/5qkgnd7ASyRXOMHriYJveUCgo8mWJm82ZncnWx91hoAjBvqFdZoiNaLJOEjvzz6EUv3NgP8T5useTzfCTGbmHl3fwEAgw+QhJ8f/WINMZuRuqqqhihJagcB/kdN1qWHmzrQvoJT665yAUDLzy2JaTFFvp91UYe8rKyC3jeuPhin8AVAcLXF+tEeDiwnCceXewDA/0gyhalmTQcB4fJ4PW4D8Jz1ys0Ark2w3RcNW3llrLTezQcAY0qEma0X20LkXfLoF9v27fv3veln5SK1WwPrk/XDJHt3koppx2kAkPUHc/gWA12fryWWk/VNVkqXQ1p0/Pmhfth2FbMuVV8g4H6SuGG48MyrJ1bTN4MgHVyjOvndPe0NONg9qsUcm++dZvLJ0Wj+nsmatfcFIDeuT6RYJ1Z19BlwdJZlg82vwpy8EznfE6sTXxYJFAzq6gYA1xtEVW+Nbwa5u/eSaTYKV9WSHjPTB27fa8Ryiv14sQ/inpJE+P0WAND147tbG5C6Cid8G6F//XpA0cONZKOhp1hgsdT8965+HgAXmsxMnxgAIARShX/Yy5XEzOHT7ACtFh9Mks6Lon0lS8PTcpDq+phTIx1TpN4z5xSbLKUr7QGeszbuTpIsOdy1iaXhqwSk7j8k8YGKrGt+iBGrVzkBQLS7asm7O0oaE3tDgV0SmgeleERSlyMp3HiCWPtlh1INj9fv96GTKdkdVKFzKTMnZ0PaPcE2fxXOKe/mVJopNND16d8+utYly6m2s9+j5Wt55qV3zlq4eN59N47rnm1INkniZyE1q4W0Vbs2LVoHJb5/7ZQ10Xl2W0OSWG5Fy75aO7pQ4GlJQ6FkQ6NmSYHE/Y2dujwdi21bNV3xvKQ+T7KGNWt8Ev93dhq0Ttpj6o8nJI0tHXPd8Nz7JdEEkaI2R6fcAT4XKyXJIY4BAsgbPGn5u3vDFhGXNNHZ6cQDmCHheWlQioCn6yUzn3nXrfO5E8+hyJTsappy1bq169b/7ZBcuKD7vJ55YNU6i3f4Q+USa0GKdJHeWbeck+uFUNmcSSqqeX1MU7SJcGygsV7C4YtUc7QCH1K8+sD7W24dUhTyClsjk7LYP3e1EwDwJvNmDKyTcPiBkBN9IixPRg798OyCUUVereZRZjar1p/phvzSJFd1EHMsCdO22aPaFJxmYxUp5NR4qhZ+p9jHNzeB0jP86STTc8LzOUmYmeLx3/TaV7Ld7Vl6Uxd3hrrdtD0WM3P8UrTYSQpm/kPLWEm2Nrj1NIOXvh8jllf3RJvfyCHkPmHaMC+Ak6L7+hKTNelQD7TeGLdjHbjPAADPPTG9smx7onDKL1FizcZi4rKRwjP09ajsTzHPqn7qyjyBoABgXHZEa53H1pDnqizWTkzIf8Xik6sK4Op+28s/btu9/Slj8KgCAWDAtgU+AKL996QKnwbbG4j1rY0ueGZHmQ7e18KAcPn8PjeknivK2HwpFwByX0wqXnLb61ytR5+HAHh+ZGaqf+X+vnlZTZvm5AEQLV9LMDP93g0AXPdEJJHecHA5ae1tBkDMJpZTrKG2/mRDG6BjGctLRgoA4sISYqbH3U7kH9Cp7wMA5yU49bOXfmu0mJlpLRA8ruDovQIATttFXNocjl5iqsyrAaBHDaeaF0K4plvMzDXZEM+rOPlILgAUvGZOgbOuZxXWMgGgsJilkc4AlnIqTQCGRFVs/dIWAJrd5HYIWVsl9LEXgO89kp0IAXhOwj+54PlMg+nQ2QbS2r08pTgfgLHcZHmxAaBYFmsDjEloMP/vXk9aMKaBubQXAFwbY+XLAIIRGU0GAm9pceLJYFpwYTh6IQAMbGD1DABFcRm/ZABDolrRSa704II7BIAWe1hNlwA411QcDQDeTaQRu0EgE73fkEa8D4BppEg0A5C9W1V/sUAmGluINWvzATzN6nMBYHBYQrv7IjPPSbBusRcQP2nMTBHTksxsvtsSGeq68ABpvA3AqNBYmQJji8Ulk7zI3PwVtaRYA6C1pfGYBIHXn2yDzC7aXEWSCQBG6zwrg0cg41s/sDfGbPUHMJE0XhOy/6Z70Mp/a1sDYgMrKfnSfyq10ACMZ+oSHK/e9eUz04fkITMBVlA4IKIIAAAQKACdASpQAFAAPikShkKhoQqVAvAMAUJZADTVCb7t5k9Z/r33y45KdvMS5I/0v3Ge9X1L/bN7gH6edJjzAfsB+2/tAfsB7gPQA/ZHrB/QA/Zn0yf27+Cj9r/2f9pD/63lP+M+o7tuPSPtplHX2PhIeBe1r33uzbAB+Rfz//U8bH108z7/O+o/9k8MP6h/ofYD/kX9E/433AfSr/J/9b/D+cf8x/wH/W9wL+Rf0f/V/3L91v3////3b+sf9pfYX/UJsNGba/Ids27jXERuw3e9isyXPTI/76k13/R+bxE0mR4uQWzhAdFYas8KuEPqbWNkqPS+BUD5mDlXRYEUoPBqrQn4OCe5lm1tY5fD+nH2r2hiC8bQLAo/x5udQHQjeMQs5vt6543dNKQXSD/U9qrkdP2fNpHdWRZtBjdeVRPZmbOdC67X20nMgAD+/4+9////Dd589TglzqWeLyRBckz3wdQNpbedP4mhZfmNv/t/7D95j+P+Qpcwb0frTF3cy8MVTpVIKepDMK1m3+EgnVOVcLbKz0p9sOcrrby4qnFafsxHvxlvUfRnKJ8czCEb+QkUMUDofOGI+df8b/HhKd2tfEgZ5Jsl9sXhA/oNlpDFqf836iN4QEAJ9AU3//ucejRv1MieDi/cwHm7bF8XxL8kCHmmoKlTf/vqHkdmgWNr7R1DPOb+rxxKprdo13qMKsUs1F7dhHN9gcYdAPG4X08RItsd22uAwfQ2ZMwBfe6bsaQmnIi3BjKIj+LMkzWoeo4WaDZf3Ps/TuxxNcgGdUyQMEz/CNfubFfKKFb73g2tgv0eTOQXOE2qzlrAqjv4TXxtyYvKCAdFRicxI7QIHr1N0gLoana9oJbGaEX7z3FzQZKLn4ozuJdf9h6pADGgs/zcvA+Oa09GzuUD5ypqstJGvQt2EClAs/3d02XIGkFOlzPAjOOvHLbSjQn4LHHGT5dfz3I34JC3kDvJDb5xyWP7T/sKRNXyi86l1KqloFBxJUO67Cq3dWhzjASQEiBwgj723w2kuJrRnzry/s7GSe+8V5hV88SySvZ8ZnQrlBPj9TXSjH4AnqUzyNWlnve/tqjhENuuu6C0Gv23APvp1s+/VsyoDQ565TcgYK32Ve02JKJKB+CtKJUyoXY0ezuJyZqfzCWsUS175lAjAlLbpWclGtGGjU1xVg3KaA+6SzTCuzYkzUvUB2B/37jv1c77zKPXJy8Q0JeZ1n997FGZE9Qc7b4o8/Ez488pHPA8PIj/U/SdRrW3wAlj8oa+xPQI3DCAMe0rcqBwNAeUTAUv785CYhwwovg+HB6psKfTLzg8zQB4+Xd3EPEYCy9SChjiXUQ205n3PbfXydgkTjDpbveenlhWDuyv8X/5YalBOx/ZQcgNARViZ5CID5X+hIWdCwjGj2nNbHaGb2gp7JCXwRVIrJ9T5Jrg3XHHZIXJdmmDBiaK90XfEqVJa2w4egOt4ZR54i/8AWGzLeUX4dP8uMm4kdY6NqqG/rJvhkczN2z8+4kpUoS2v3KPFAb8fX0TxtDMq/dNrXhyhl9+LhBK2Og8l7QPZ/UGbSKsLMRJMezO6yyJYISM6B/y72bGGhog8rtHGxkEEJFprI9VeRUQTYcAjaXvJsuC7ZeJI7CikOnDBAnUDJZ1aeehvNn3+3wssj/HAHqxwh0Q6IYq2tf+WLze62401+KoUH9J1w6HUjU6gEJ0a+ljMwUoNjAL/m4PnBeN/Ohqqsrbjf76u8uZHPck1/JR1dApCl8+Akrz8OPmvUKhdeVd3EL5gWkexy5FU8N+f5rNdFyn+sZft5ezucEgY2Qp3S26bNsn/62b90ds2+oFP01jcmbUBmSrxzyadQ+2LPmBVH6VoFznCzVg0c8vmMtt4Oh/0ZeACsE0NxDlu+/xbo1yMJU31KNcoCpZOSrx4gp7z2KMp7hCdIu8JhcbIupNGv9pa55ZdYeoyHIqYWaUK4CRmqXxl2TpFOEINS5rB2rLrrrbNr9QB2V74RF4i1UgUpBUVL03gmhR+Qv5CnQZDj0fbB+Ab/KPZXNEaKGGE+hy558S4wCzMPNHBTzK8vhLSwqrMJagIXsrLptu73WhvTmmBew4eoyfvkV+CABzuHbNn7Xz3CkXEpRdtOjUdujn18rEulGf4tyNNx1vo8Y3GS+z+c2793H+imQWZ50RsSy+KqPBtaP6GPrDfnMsz9M35C9cv4PThXER4t/O9XOyNa44TXnSxzZzFqcFLW9R2RlGKEwMviPxcg//K8utGIAFlJo0uXv79he9LlXDs4dxNWvKYko0kKSCm1tPTzLufqujzVk3D2xB5TpNdiNJbEs4II9ReB19puN5PG9H892mDag76dUWhexgcJDD0Qtia2I1WZNsDfdjyMCpBFEoStajrJezj84JRkVUalDS0Qj4vMphn3jf/b7rifyauq70Sf33LHsz8sMP7TKb8YIWxf/P5wwsJX2Nt73V4PKaN3EUYx8NdgGQnwn4OZT9j7coLpY5uJOpXuIm3/c9M1+9Wk2I0CDCnz25SfI9EC2viZMIta+qaWZ8o6xuLOG0nRItAEJ9UrpD//6vu7joJVUCuWhzc5Fh8A0iI5RbH/71aCp5H1frbvQUXW3KNSFzqSZ0BRY3dD2OQdkXRZ0OztAfK706RoJ5N+EL4UOvtuP7kF0sbDLgOo1orYcwmDAlg7u6uqoyKuBr5G9Mjlp7P3JYbH+QDGR/D+RlY3CB3oX1R66T/wJqZGUdOUh9xiibXDjDbm8utaM+57k+4sOpRJ/wakqEurkI6nO7C4kkCzfsCpS18t6kLRkJlsjZb+0p3DwSrU/+gRX+v/PcQqxwmMWYsro5TKk9xjewAzffhqr6sF5ri1SL00r6LF3/x+obW7VvMHuCVH/idn0UdmQEojYUCzuMFbDQ9BZWQLDkV9ORrHILRi9z/19lee+398f27AAAAA==" alt="">Bill Maker</h1>
 <div class="sub">Shree Giriraj Auto Parts · <span style="color:#3fb950;">orders from Value-FAS</span></div>
 <div class="dates">
 <button type="button" class="db active" id="d-today" onclick="pickDay('today')">Today</button>
@@ -238,11 +240,15 @@ function render(){
     list.innerHTML = '<div class="empty">No orders for this day.</div>';
   } else {
     list.innerHTML = rows.map(o => {
-      const done  = o.status === 'billed';
+      // GREEN = the PC really made the bill. make_bill.py sets
+      // fas_entry_started=true only after it has re-read the
+      // Value-FAS database and found the order on a bill.
+      const done   = o.status === 'billed' && o.fas_entry_started === true;
+      // Tapped on the phone, PC hasn't finished yet.
+      const making = o.status === 'billed' && !done;
       const items = o.items || [];
-      const badge = done ? '<span class="badge b-sent">billed</span>' : '';
-      const start = o.fas_entry_started && !done
-        ? '<span class="badge b-nophone">in progress</span>' : '';
+      const badge = done   ? '<span class="badge b-sent">billed</span>' : '';
+      const start = making ? '<span class="badge b-making">banavai rahyu</span>' : '';
       const detail = (openItems === o.id)
         ? '<div class="items">' + items.map(it => {
             const rate = Number(it.arate != null ? it.arate : it.mrp) || 0;
@@ -251,7 +257,7 @@ function render(){
                  + `<b>${qty} × ${money(rate)}</b></div>`;
           }).join('') + '</div>'
         : '';
-      return `<label class="row${done ? ' done' : ''}">`
+      return `<label class="row${done ? ' done' : making ? ' making' : ''}">`
         + `<input type="checkbox" class="cb" data-id="${esc(o.id)}"`
         + `${picked.has(o.id) ? ' checked' : ''}${done ? ' disabled' : ''} onchange="toggle(this)">`
         + `<div class="info"><div class="nm"><span class="t">${esc(o.party || o.ac_code || '?')}</span>${badge}${start}</div>`
@@ -293,11 +299,16 @@ async function makeBills(){
       const r = await fetch(`${SB_URL}/rest/v1/orders?id=eq.${encodeURIComponent(o.id)}`, {
         method: 'PATCH',
         headers: {...H, 'Content-Type': 'application/json', Prefer: 'return=minimal'},
-        body: JSON.stringify({status: 'billed', updated_at: new Date().toISOString()})
+        // fas_entry_started:false = 'queued, PC has not confirmed it yet'.
+        // The row goes amber now and only turns green when
+        // make_bill.py sets fas_entry_started=true.
+        body: JSON.stringify({status: 'billed', fas_entry_started: false,
+                              updated_at: new Date().toISOString()})
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       ok.push(o.order_no);
       o.status = 'billed';
+      o.fas_entry_started = false;
       picked.delete(o.id);
     }catch(e){
       failed.push(`${o.order_no} (${e.message})`);
@@ -316,6 +327,8 @@ async function makeBills(){
 function manualRefresh(){ note(''); load(); }
 
 load();
-setInterval(() => { if (!busy) load(); }, 15000);
+// 3s, not 15s -- the row has to go green the moment the PC
+// confirms the bill, not up to a quarter of a minute later.
+setInterval(() => { if (!busy) load(); }, 3000);
 </script>
 </body></html>
