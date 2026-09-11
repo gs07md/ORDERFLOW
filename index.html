@@ -79,16 +79,21 @@
   }
   .item-row.mismatch{ background:var(--bad-bg); border-color:#F3B9B6; }
   .item-top{ display:flex; justify-content:space-between; gap:10px; }
-  .item-code{ font-family:var(--mono); font-size:12.5px; color:var(--accent); }
+  .item-code{ font-family:var(--mono); font-size:15.5px; font-weight:800; color:var(--accent); }
   .item-desc{ font-size:14px; margin-top:2px; line-height:1.35; }
   .item-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:11px; }
   .field{ display:flex; flex-direction:column; gap:4px; }
   .field label{ font-size:10.5px; color:var(--text-dim); letter-spacing:.3px; }
-  .field .readonly{ font-family:var(--mono); font-size:14.5px; color:var(--text-dim); padding:8px 0; }
-  .field input{
-    background:var(--bg-raised); border:1px solid var(--line); color:var(--text);
-    border-radius:8px; padding:8px 9px; font-size:15px; font-family:var(--mono); width:100%;
+  /* Read-only cells and typed-in cells are drawn EXACTLY the same -- same
+     box, same height, same type -- so a row reads as four equal boxes
+     instead of two bits of loose text beside two grey boxes. */
+  .field .readonly, .field input{
+    border:1px solid var(--line); border-radius:8px;
+    padding:9px 10px; font-size:15px; font-family:var(--mono);
+    width:100%; box-sizing:border-box; min-height:40px; line-height:20px;
   }
+  .field .readonly{ background:transparent; color:var(--text); font-weight:700; }
+  .field input{ background:var(--bg-raised); color:var(--text); }
   .item-row.mismatch .field input{ border-color:var(--bad); }
   .field input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
   .field input::placeholder{ color:var(--text-dim); opacity:.55; }
@@ -142,6 +147,9 @@
 
   .empty{ text-align:center; color:var(--text-dim); font-size:13.5px; padding:40px 20px; }
   .fab-note{ font-size:11.5px; color:var(--text-dim); text-align:center; margin:16px 2px 4px; line-height:1.5; }
+.user-name-input{ width:100%; margin-top:5px; padding:9px 10px; font-size:15px;
+  font-weight:600; border:1px solid var(--line); border-radius:8px;
+  background:var(--bg-panel); color:var(--text); }
 .loc-line{ font-size:15.5px; font-weight:800; color:var(--accent); text-align:left; margin:6px 0 0; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
 .loc-stock{ font-family:var(--mono); font-size:13px; font-weight:700; color:var(--text-dim); background:var(--bg-panel); border:1px solid var(--line); border-radius:6px; padding:2px 9px; }
 
@@ -244,6 +252,23 @@ async function getUser(phone){
     const rows = await res.json();
     return rows[0] || null;
   }catch(e){ console.error('getUser failed', e); return null; }
+}
+
+function esc(x){
+  return String(x ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function patchUser(phone, fields){
+  // PATCH touches ONLY the fields given. setUser() posts the whole row,
+  // so calling it with no name (as the role dropdown used to) wiped the
+  // person's name every time their role was changed.
+  try{
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/users?phone=eq.${encodeURIComponent(phone)}`,
+      {method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(fields)});
+    return res.ok;
+  }catch(e){ console.error('patchUser failed', e); return false; }
 }
 
 async function setUser(phone, role, name){
@@ -442,38 +467,73 @@ function renderPhoneLogin(){
   main.innerHTML = `
     <div class="section-label">Tamaro mobile number nakho</div>
     <div class="field" style="max-width:320px;">
-      <input id="login-phone" inputmode="numeric" placeholder="98765 43210" style="font-size:18px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-panel);">
-    </div>
-    <div class="section-label">Tamaru naam nakho</div>
-    <div class="field" style="max-width:320px;">
-      <input id="login-name" placeholder="Jem Ramesh Bhai" style="font-size:16px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-panel);">
+      <input id="login-phone" inputmode="numeric" placeholder="98765 43210" oninput="prefillName()" style="font-size:18px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-panel);">
     </div>
     <button class="btn btn-primary" style="max-width:320px;" onclick="doPhoneLogin()">Login</button>
+    <div class="fab-note" id="name-hint">Naam CEO nakhe che (Manage Users thi).</div>
     <div class="fab-note">Nava number ne CEO j role assign kari shake che (Manage Users thi).</div>
   `;
 }
 
+let _prefillFor = '';
+async function prefillName(){
+  // As soon as a full number is typed, pull the name the CEO saved for it
+  // so nobody has to type their own name every time.
+  const phone = (document.getElementById('login-phone').value || '').replace(/\D/g, '');
+  const hint = document.getElementById('name-hint');
+  if(!hint) return;
+  if(phone.length < 10){
+    _prefillFor = '';
+    hint.textContent = 'Naam CEO nakhe che (Manage Users thi).';
+    hint.style.color = '';
+    return;
+  }
+  if(phone === _prefillFor) return;
+  _prefillFor = phone;
+  const u = await getUser(phone);
+  if((document.getElementById('login-phone').value || '').replace(/\D/g,'') !== phone) return;
+  const saved = (u && u.name ? String(u.name) : '').trim();
+  if(saved){
+    hint.textContent = '\u2713 ' + saved;
+    hint.style.color = 'var(--ok)';
+  }else if(u){
+    hint.textContent = 'Aa number mate naam save nathi -- CEO ne kaho.';
+    hint.style.color = 'var(--bad)';
+  }else{
+    hint.textContent = 'Aa number register nathi thayu -- CEO ne kaho.';
+    hint.style.color = 'var(--bad)';
+  }
+}
+
 async function doPhoneLogin(){
   const raw = document.getElementById('login-phone').value.trim();
-  const nameInput = document.getElementById('login-name').value.trim();
   const phone = raw.replace(/\D/g, '');
   if(phone.length < 10){ alert('Sahi 10-digit mobile number nakho'); return; }
-  if(!nameInput){ alert('Tamaru naam nakhvu jaruri che.'); document.getElementById('login-name').focus(); return; }
 
+  // Nobody types their own name any more. The CEO puts it against the
+  // number in Manage Users, and it is simply read back here.
   const existing = await getUser(phone);
+  const savedName = (existing && existing.name ? String(existing.name) : '').trim();
+
   if(existing){
+    if(!savedName){
+      alert('Aa number mate naam save nathi thayu.\n\nCEO ne kaho: Manage Users '
+            + 'ma ' + phone + ' ni same naam nakhe.');
+      return;
+    }
     currentRole = existing.role;
     currentPhone = phone;
-    currentName = nameInput || existing.name || '';
-    if(nameInput && nameInput !== existing.name) await setUser(phone, existing.role, nameInput);
+    currentName = savedName;
   } else {
     const noUsersYet = !(await anyUsersExist());
     if(noUsersYet){
-      // Bootstrap: the very first person to log in becomes CEO.
-      await setUser(phone, 'ceo', nameInput);
+      // Bootstrap: the very first person in becomes CEO. There is no CEO
+      // yet to name them, so the number stands in until they set their
+      // own name in Manage Users.
+      await setUser(phone, 'ceo', phone);
       currentRole = 'ceo';
       currentPhone = phone;
-      currentName = nameInput;
+      currentName = phone;
     } else {
       alert('Aa number register nathi thayu. CEO ne kaho tamne "Manage Users" thi umerva mate.');
       return;
@@ -509,13 +569,16 @@ async function renderManageUsers(){
   main.innerHTML = `<div class="empty">Loading...</div>`;
   const users = await listUsers();
   const rows = users.map(u => `
-    <div class="order-card" style="cursor:default;">
-      <div>
-        <div class="no">${u.phone}</div>
-        <div class="title">${u.name || '(no name)'}</div>
+    <div class="order-card" style="cursor:default; align-items:flex-start;">
+      <div style="flex:1; min-width:0;">
+        <div class="no">${esc(u.phone)}</div>
+        <input class="user-name-input" value="${esc(u.name || '')}"
+               placeholder="Naam nakho (dakhla tarike Ramesh Bhai)"
+               onchange="saveUserName('${esc(u.phone)}', this.value, this)">
+        <div class="fab-note" id="saved-${esc(u.phone)}" style="text-align:left; margin:4px 0 0; min-height:14px;"></div>
       </div>
       <div class="right">
-        <select onchange="changeUserRole('${u.phone}', this.value)" style="padding:6px 8px; border-radius:8px; border:1px solid var(--line);">
+        <select onchange="changeUserRole('${esc(u.phone)}', this.value)" style="padding:6px 8px; border-radius:8px; border:1px solid var(--line);">
           <option value="ceo" ${u.role==='ceo'?'selected':''}>CEO</option>
           <option value="dispatcher" ${u.role==='dispatcher'?'selected':''}>Dispatcher</option>
           <option value="picker" ${u.role==='picker'?'selected':''}>Picker</option>
@@ -527,6 +590,7 @@ async function renderManageUsers(){
     ${rows || '<div class="empty">Koi user nathi</div>'}
     <div class="section-label">Navo number umero</div>
     <div class="field"><input id="new-user-phone" placeholder="98765 43210" style="padding:10px; border:1px solid var(--line); border-radius:8px;"></div>
+    <div class="field" style="margin-top:8px;"><input id="new-user-name" placeholder="Naam (dakhla tarike Ramesh Bhai)" style="padding:10px; border:1px solid var(--line); border-radius:8px;"></div>
     <div class="field" style="margin-top:8px;">
       <select id="new-user-role" style="padding:10px; border:1px solid var(--line); border-radius:8px;">
         <option value="dispatcher">Dispatcher</option>
@@ -539,16 +603,35 @@ async function renderManageUsers(){
 }
 
 async function changeUserRole(phone, role){
-  await setUser(phone, role);
+  // PATCH, not setUser -- setUser rewrote the whole row and blanked the
+  // name every time a role was changed here.
+  await patchUser(phone, {role});
   renderManageUsers();
+}
+
+async function saveUserName(phone, name, inputEl){
+  const clean = String(name || '').trim();
+  const note = document.getElementById('saved-' + phone);
+  const ok = await patchUser(phone, {name: clean});
+  if(note){
+    note.textContent = ok
+      ? (clean ? '✓ Saved -- aa number thi login karse tyare aa naam apoap aavse.'
+               : '✓ Naam kadhi nakhyu.')
+      : '✗ Save na thayu -- internet check karo.';
+    note.style.color = ok ? 'var(--ok)' : 'var(--bad)';
+  }
+  if(inputEl) inputEl.value = clean;
 }
 
 async function addNewUser(){
   const raw = document.getElementById('new-user-phone').value.trim();
   const phone = raw.replace(/\D/g, '');
   const role = document.getElementById('new-user-role').value;
+  const name = (document.getElementById('new-user-name').value || '').trim();
   if(phone.length < 10){ alert('Sahi 10-digit number nakho'); return; }
-  await setUser(phone, role);
+  if(!name){ alert('Naam pan nakho -- aa number thi login thay tyare e j naam vaprashe.');
+             document.getElementById('new-user-name').focus(); return; }
+  await setUser(phone, role, name);
   renderManageUsers();
 }
 
@@ -675,7 +758,7 @@ function renderOrderList(){
   const isCeo = currentRole === 'ceo';
   const rows = orders.map(o=>{
     const total = o.items.length;
-    const mismatches = o.items.filter(it => it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp))).length;
+    const mismatches = o.items.filter(it => it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)))).length;
     const showCheckbox = isCeo && o.status === 'ready';
     return `
       <div class="order-card" data-status="${o.status}" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')+' '+o.items.map(it=>it.code).join(' ')).toLowerCase()}" onclick="goToOrder('${o.id}')">
@@ -832,7 +915,7 @@ function renderPackingCheck(o){
     const it = o.items[idx];
     const aq = it.aqty !== null ? it.aqty : '';
     const ar = it.arate !== null ? it.arate : '';
-    const mismatch = it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp));
+    const mismatch = it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
     const done = it.aqty !== null && it.aqty !== undefined;
     const stk = stockLookup(it.code);
     return `
@@ -860,7 +943,7 @@ function renderPackingCheck(o){
           </div>
           <div class="field">
             <label>ACTUAL RATE</label>
-            <input inputmode="decimal" placeholder="${it.mrp}" value="${ar}" oninput="updateItem('${o.id}', ${idx}, 'arate', this.value)">
+            <input inputmode="decimal" placeholder="${mrpOf(it)}" value="${ar}" oninput="updateItem('${o.id}', ${idx}, 'arate', this.value)">
           </div>
         </div>
         <div class="mismatch-tag ${mismatch ? '' : 'hidden'}" id="tag-${idx}">⚠ Ordered thi alag che — check karo</div>
@@ -927,7 +1010,7 @@ function renderPickerSingleItem(o){
         </div>
         <div class="field">
           <label>ACTUAL RATE</label>
-          <input id="picker-rate" inputmode="decimal" placeholder="${it.mrp}">
+          <input id="picker-rate" inputmode="decimal" placeholder="${mrpOf(it)}">
         </div>
       </div>
     </div>
@@ -941,7 +1024,7 @@ function confirmPickerItem(orderId, idx){
   const qtyVal = document.getElementById('picker-qty').value;
   const rateVal = document.getElementById('picker-rate').value;
   it.aqty = qtyVal === '' ? it.oqty : Number(qtyVal);
-  it.arate = rateVal === '' ? it.mrp : Number(rateVal);
+  it.arate = rateVal === '' ? mrpOf(it) : Number(rateVal);
   it.done = true;
   it.pickedBy = currentName || currentPhone || 'Picker';
   if(o.status === 'pending') o.status = 'checking';
@@ -956,7 +1039,7 @@ function updateItem(orderId, idx, field, value){
   if(o.status === 'pending') o.status = 'checking';
   DB.save(orders);
   const it = o.items[idx];
-  const mismatch = it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp));
+  const mismatch = it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
   const rowEl = document.getElementById(`row-${idx}`);
   const tagEl = document.getElementById(`tag-${idx}`);
   if(rowEl) rowEl.classList.toggle('mismatch', mismatch);
@@ -968,7 +1051,7 @@ function finishPacking(orderId){
   // fill blanks with ordered values
   o.items.forEach(it=>{
     if(it.aqty===null) it.aqty = it.oqty;
-    if(it.arate===null) it.arate = it.mrp;
+    if(it.arate===null) it.arate = mrpOf(it);
   });
   o.status = 'ready';
   DB.save(orders);
@@ -978,7 +1061,7 @@ function finishPacking(orderId){
 function renderRecheck(o){
   const rows = o.items.map(it=>{
     const qtyMismatch = Number(it.aqty) !== Number(it.oqty);
-    const rateMismatch = Number(it.arate) !== Number(it.mrp);
+    const rateMismatch = Number(it.arate) !== Number(mrpOf(it));
     const mismatch = qtyMismatch || rateMismatch;
     return `
       <div class="recheck-row ${mismatch?'mismatch':''}">
@@ -989,13 +1072,13 @@ function renderRecheck(o){
         </div>
         <div>
           <div class="colhead">RATE</div>
-          <div class="num ${rateMismatch?'diff':''}">${fmt(it.mrp)} → ${fmt(it.arate)}</div>
+          <div class="num ${rateMismatch?'diff':''}">${fmt(mrpOf(it))} → ${fmt(it.arate)}</div>
         </div>
       </div>`;
   }).join('');
 
-  const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(it.mrp ?? 0), 0);
-  const mismatchCount = o.items.filter(it=>Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(it.mrp)).length;
+  const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(mrpOf(it)), 0);
+  const mismatchCount = o.items.filter(it=>Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it))).length;
 
   main.innerHTML = `
     <div class="status-banner">${mismatchCount ? '⚠ '+mismatchCount+' item ma Ordered ane Actual alag che — bill banavta pehla ek var joi levu.' : '✓ Badha item Ordered mujab j che.'}</div>
@@ -1030,9 +1113,9 @@ function renderFinalBill(o){
     <div class="recheck-row">
       <div class="desc">${it.desc}<div class="code">${it.code}</div></div>
       <div><div class="colhead">QTY</div><div class="num">${it.aqty}</div></div>
-      <div><div class="colhead">AMOUNT</div><div class="num">${fmt((it.aqty ?? it.oqty ?? 0)*(it.mrp ?? 0))}</div></div>
+      <div><div class="colhead">AMOUNT</div><div class="num">${fmt((it.aqty ?? it.oqty ?? 0)*mrpOf(it))}</div></div>
     </div>`).join('');
-  const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(it.mrp ?? 0), 0);
+  const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(mrpOf(it)), 0);
 
   main.innerHTML = `
     <div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ Bill confirmed. Value-FAS ma final entry mate ready.</div>
