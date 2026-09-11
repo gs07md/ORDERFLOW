@@ -851,8 +851,8 @@ function renderPackingCheck(o){
             <div class="readonly">${it.oqty}</div>
           </div>
           <div class="field">
-            <label>MRP / RATE</label>
-            <div class="readonly">${fmt(it.mrp)}</div>
+            <label>MRP</label>
+            <div class="readonly">${fmt(mrpOf(it))}</div>
           </div>
           <div class="field">
             <label>ACTUAL QTY</label>
@@ -918,8 +918,8 @@ function renderPickerSingleItem(o){
           <div class="readonly">${it.oqty}</div>
         </div>
         <div class="field">
-          <label>MRP / RATE</label>
-          <div class="readonly">${fmt(it.mrp)}</div>
+          <label>MRP</label>
+          <div class="readonly">${fmt(mrpOf(it))}</div>
         </div>
         <div class="field">
           <label>ACTUAL QTY</label>
@@ -1081,6 +1081,17 @@ function locationSortedIndices(o){
     return la.localeCompare(lb);
   });
   return idxs;
+}
+
+function mrpOf(it){
+  // The item's real MRP is ItemMast.SRate, which reaches us on the STOCK
+  // record as `rate`. What the order carries in `it.mrp` is actually
+  // InvTran.NetRate -- the rate this party is billed at AFTER their
+  // discount -- so it is not the printed price and must not be labelled
+  // MRP. Fall back to it only when the item is not in the stock cache.
+  const s = stockLookup(it.code);
+  const r = s ? Number(s.rate) : 0;
+  return (r > 0) ? r : Number(it.mrp ?? 0);
 }
 
 function stockLookup(code){
