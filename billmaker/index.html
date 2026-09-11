@@ -1,0 +1,321 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bill Maker - Shree Giriraj Auto Parts</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2e6fc0">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Bill Maker">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Hanken Grotesk',system-ui,-apple-system,sans-serif;background:#f3f5f7;color:#14181d;padding:14px;padding-bottom:96px;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:640px;margin:0 auto;}
+h1{font-family:'Archivo',sans-serif;font-size:21px;font-weight:800;letter-spacing:-.01em;color:#14181d;line-height:1.1;display:flex;align-items:center;gap:11px;}
+h1 .logo{width:40px;height:40px;flex:none;object-fit:contain;}
+.sub{color:#67707a;font-size:12.5px;margin:6px 0 16px;}
+.dates{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;}
+.db{flex:1;min-width:96px;padding:11px 8px;font-size:14px;font-weight:600;font-family:inherit;background:#fff;color:#2c333b;border:1px solid #d7dde2;border-radius:9px;cursor:pointer;}
+.db.active{background:#2e6fc0;border-color:#2e6fc0;color:#fff;box-shadow:0 2px 8px rgba(46,111,192,.28);}
+input[type=date]{padding:10px;background:#fff;color:#2c333b;border:1px solid #d7dde2;border-radius:9px;font-size:14px;font-family:'IBM Plex Mono',monospace;}
+#search{width:100%;padding:13px 14px;font-size:15px;font-family:inherit;background:#fff;color:#14181d;border:1px solid #d7dde2;border-radius:10px;margin-bottom:10px;}
+#search:focus{outline:none;border-color:#2e6fc0;box-shadow:0 0 0 3px rgba(46,111,192,.13);}
+#search::placeholder{color:#94a0aa;}
+.rangerow{display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-size:13px;color:#67707a;margin-bottom:12px;font-weight:500;}
+.rangerow input{width:62px;padding:9px 7px;background:#fff;color:#14181d;border:1px solid #d7dde2;border-radius:7px;font-size:14px;font-family:'IBM Plex Mono',monospace;}
+.rangerow input:focus{outline:none;border-color:#2e6fc0;}
+.rangerow button{padding:9px 10px;background:#fff;color:#2c333b;border:1px solid #d7dde2;border-radius:7px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;}
+.rangerow button:active{background:#eef1f4;}
+#status{font-size:13px;color:#9a6b00;margin-bottom:10px;min-height:18px;font-weight:500;}
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+.toolbar .grp{display:inline-flex;align-items:center;gap:7px;}
+.fbtn{padding:9px 15px;background:#fff;color:#67707a;border:1px solid #d7dde2;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;}
+.fbtn.active{background:#2e6fc0;color:#fff;border-color:#2e6fc0;}
+.hist{font-size:13px;color:#2c333b;text-decoration:none;background:#fff;border:1px solid #d7dde2;border-radius:8px;padding:9px 13px;font-weight:600;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:5px;}
+.hist:active{background:#eef1f4;}
+#list{background:#fff;border:1px solid #e6eaee;border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(20,24,29,.05);}
+.row{display:flex;align-items:center;gap:12px;padding:13px 15px;border-bottom:1px solid #f1f3f5;cursor:pointer;}
+.row:last-child{border-bottom:none;}
+.row.off{opacity:.5;}
+.row.done{background:#f5f9f6;}
+.row .ph{font-size:12px;color:#2e6fc0;font-family:'IBM Plex Mono',monospace;}
+.row .cb{width:21px;height:21px;flex:0 0 auto;accent-color:#2e6fc0;cursor:pointer;}
+.row .info{flex:1;min-width:0;}
+.row .nm{font-size:14.5px;font-weight:700;color:#14181d;display:flex;align-items:center;min-width:0;}
+.row .nm .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.row .meta{font-size:12px;color:#94a0aa;margin-top:3px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.row .amt{font-size:15px;font-weight:600;white-space:nowrap;font-family:'IBM Plex Mono',monospace;color:#14181d;}
+.badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-left:7px;vertical-align:middle;flex:none;white-space:nowrap;}
+.b-sent{background:#d9f0e0;color:#1f7a39;}
+.b-nophone{background:#f8dcd9;color:#c33a32;}
+.edit{font-size:11.5px;font-weight:600;color:#2c333b;background:#fff;border:1px solid #d7dde2;border-radius:7px;padding:5px 10px;margin-left:7px;flex:0 0 auto;cursor:pointer;font-family:inherit;}
+.edit:active{background:#eef1f4;}
+.foot{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-top:1px solid #e6eaee;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+#summary{font-size:14px;color:#2c333b;font-weight:500;}
+.send{padding:13px 24px;font-size:15px;font-weight:700;font-family:inherit;background:#2e6fc0;color:#fff;border:none;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(46,111,192,.32);}
+.send:active{background:#235aa3;}
+.send:disabled{background:#e6eaee;color:#aab2bb;box-shadow:none;}
+.result{background:#f5f9f6;border:1px solid #cce8d4;border-radius:10px;padding:13px 15px;font-size:13px;white-space:pre-wrap;margin:0 0 10px;color:#14181d;font-family:'IBM Plex Mono',monospace;}
+.e-edit{color:#2e6fc0;}
+.e-reset{color:#c33a32;}
+.items{padding:0 15px 13px 48px;border-bottom:1px solid #f1f3f5;background:#fbfcfd;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#67707a;}
+.items div{display:flex;justify-content:space-between;gap:12px;padding:3px 0;}
+.items b{color:#14181d;font-weight:600;}
+.empty{padding:34px 15px;text-align:center;color:#94a0aa;font-size:14px;}
+</style>
+</head><body>
+<div class="wrap">
+<h1><img class="logo" src="icon-192.png" alt="" onerror="this.remove()">Bill Maker</h1>
+<div class="sub">Shree Giriraj Auto Parts · <span style="color:#3fb950;">orders from Value-FAS</span></div>
+<div class="dates">
+<button type="button" class="db active" id="d-today" onclick="pickDay('today')">Today</button>
+<button type="button" class="db" id="d-yest" onclick="pickDay('yesterday')">Yesterday</button>
+<input type="date" id="cdate" onchange="pickCustom()">
+</div>
+<input id="search" placeholder="Search party or order #" oninput="render()" autocomplete="off">
+<div class="rangerow">Order #
+<input id="rfrom" inputmode="numeric" placeholder="from">to
+<input id="rto" inputmode="numeric" placeholder="to">
+<button type="button" onclick="selRange()">Range</button>
+<button type="button" onclick="selAll(true)">All</button>
+<button type="button" onclick="selAll(false)">Clear</button>
+</div>
+<div class="toolbar">
+<span class="grp"><button type="button" class="fbtn active" id="f-all" onclick="setFilter('all')">All</button>
+<button type="button" class="fbtn" id="f-pending" onclick="setFilter('pending')">Pending</button>
+<button type="button" class="fbtn" id="f-billed" onclick="setFilter('billed')">Billed</button></span>
+<span class="grp"><button type="button" class="hist" onclick="manualRefresh()">↻ Refresh</button></span>
+</div>
+<div id="status">loading…</div>
+<div id="result" style="display:none"></div>
+<div id="list"></div>
+</div>
+<div class="foot">
+<div id="summary" style="font-size:13px;">0 selected · Rs. 0</div>
+<button type="button" class="send" id="sendbtn" onclick="makeBills()" disabled>Make Bills</button>
+</div>
+<script>
+const SB_URL = 'https://mzzieomklvphwfwyiqjn.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16emllb21rbHZwaHdmd3lpcWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NjY0MjEsImV4cCI6MjEwNDM0MjQyMX0.6SU8qfB9S9m6JJL1pLFFmt61PIchEyGgmkOIXu1LCec';
+const H = {apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY};
+
+let orders = [];        // whatever is loaded for the chosen date
+let picked = new Set(); // order ids ticked
+let filter = 'all';
+let day = 'today';
+let openItems = null;   // id whose item lines are expanded
+let busy = false;
+
+function ymd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+
+function chosenDate(){
+  if (day === 'today') return ymd(new Date());
+  if (day === 'yesterday'){ const d = new Date(); d.setDate(d.getDate()-1); return ymd(d); }
+  return day; // an explicit YYYY-MM-DD from the date picker
+}
+
+function total(o){
+  return (o.items || []).reduce((s, it) => {
+    const rate = Number(it.arate != null ? it.arate : it.mrp) || 0;
+    const qty  = Number(it.aqty  != null ? it.aqty  : it.oqty) || 0;
+    return s + rate * qty;
+  }, 0);
+}
+
+function money(n){ return Math.round(n).toLocaleString('en-IN'); }
+
+function note(msg, ok){
+  const el = document.getElementById('result');
+  if (!msg){ el.style.display = 'none'; return; }
+  el.className = 'result';
+  el.style.display = 'block';
+  el.style.background = ok ? '#f5f9f6' : '#fdf5f4';
+  el.style.borderColor = ok ? '#cce8d4' : '#f3d3cf';
+  el.textContent = msg;
+}
+
+async function load(){
+  const date = chosenDate();
+  try{
+    const r = await fetch(`${SB_URL}/rest/v1/orders?order_date=eq.${date}&select=*`, {headers: H});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json();
+    rows.sort((a,b) => Number(a.order_no) - Number(b.order_no));
+    orders = rows;
+    // drop ticks for orders that are no longer on screen
+    picked = new Set([...picked].filter(id => rows.some(o => o.id === id)));
+    render();
+  }catch(e){
+    document.getElementById('status').textContent = 'could not load — ' + e.message;
+  }
+}
+
+function pickDay(which){
+  day = which;
+  document.getElementById('d-today').classList.toggle('active', which === 'today');
+  document.getElementById('d-yest').classList.toggle('active', which === 'yesterday');
+  document.getElementById('cdate').value = '';
+  note('');
+  load();
+}
+
+function pickCustom(){
+  const v = document.getElementById('cdate').value;
+  if (!v) return;
+  day = v;
+  document.getElementById('d-today').classList.remove('active');
+  document.getElementById('d-yest').classList.remove('active');
+  note('');
+  load();
+}
+
+function setFilter(f){
+  filter = f;
+  for (const id of ['all','pending','billed'])
+    document.getElementById('f-' + id).classList.toggle('active', id === f);
+  render();
+}
+
+function visible(){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  return orders.filter(o => {
+    if (filter === 'pending' && o.status !== 'pending') return false;
+    if (filter === 'billed'  && o.status !== 'billed')  return false;
+    if (!q) return true;
+    return (o.party || '').toLowerCase().includes(q)
+        || String(o.order_no).includes(q)
+        || (o.ac_code || '').toLowerCase().includes(q);
+  });
+}
+
+function toggle(cb){
+  const id = cb.dataset.id;
+  if (cb.checked) picked.add(id); else picked.delete(id);
+  summary();
+}
+
+function selAll(on){
+  for (const o of visible()){
+    if (o.status === 'billed') continue;   // already done — never re-bill
+    if (on) picked.add(o.id); else picked.delete(o.id);
+  }
+  render();
+}
+
+function selRange(){
+  const from = Number(document.getElementById('rfrom').value);
+  const to   = Number(document.getElementById('rto').value);
+  if (!from || !to){ note('Enter both from and to order numbers.', false); return; }
+  const lo = Math.min(from, to), hi = Math.max(from, to);
+  for (const o of visible()){
+    const n = Number(o.order_no);
+    if (n >= lo && n <= hi && o.status !== 'billed') picked.add(o.id);
+  }
+  render();
+}
+
+function showItems(ev, id){
+  ev.preventDefault();
+  ev.stopPropagation();
+  openItems = (openItems === id) ? null : id;
+  render();
+}
+
+function summary(){
+  let sum = 0;
+  for (const o of orders) if (picked.has(o.id)) sum += total(o);
+  document.getElementById('summary').textContent =
+    `${picked.size} selected · Rs. ${money(sum)}`;
+  document.getElementById('sendbtn').disabled = busy || picked.size === 0;
+}
+
+function render(){
+  const rows = visible();
+  const list = document.getElementById('list');
+
+  if (!rows.length){
+    list.innerHTML = '<div class="empty">No orders for this day.</div>';
+  } else {
+    list.innerHTML = rows.map(o => {
+      const done  = o.status === 'billed';
+      const items = o.items || [];
+      const badge = done ? '<span class="badge b-sent">billed</span>' : '';
+      const start = o.fas_entry_started && !done
+        ? '<span class="badge b-nophone">in progress</span>' : '';
+      const detail = (openItems === o.id)
+        ? '<div class="items">' + items.map(it => {
+            const rate = Number(it.arate != null ? it.arate : it.mrp) || 0;
+            const qty  = Number(it.aqty  != null ? it.aqty  : it.oqty) || 0;
+            return `<div><span>${esc(it.code)} · ${esc(it.desc || '')}</span>`
+                 + `<b>${qty} × ${money(rate)}</b></div>`;
+          }).join('') + '</div>'
+        : '';
+      return `<label class="row${done ? ' done' : ''}">`
+        + `<input type="checkbox" class="cb" data-id="${esc(o.id)}"`
+        + `${picked.has(o.id) ? ' checked' : ''}${done ? ' disabled' : ''} onchange="toggle(this)">`
+        + `<div class="info"><div class="nm"><span class="t">${esc(o.party || o.ac_code || '?')}</span>${badge}${start}</div>`
+        + `<div class="meta">#${esc(o.order_no)} · <span class="ph">${esc(o.ac_code || '')}</span>`
+        + ` · ${items.length} item${items.length === 1 ? '' : 's'}`
+        + `${o.location ? ' · ' + esc(o.location) : ''}</div></div>`
+        + `<div class="amt">${money(total(o))}</div>`
+        + `<span class="edit e-edit" onclick="showItems(event,'${esc(o.id)}')">items</span>`
+        + `</label>${detail}`;
+    }).join('');
+  }
+
+  const pend = orders.filter(o => o.status === 'pending').length;
+  document.getElementById('status').textContent =
+    `${rows.length} shown · ${pend} pending · refreshed ${new Date().toLocaleTimeString()}`;
+  summary();
+}
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function makeBills(){
+  if (busy || !picked.size) return;
+  const chosen = orders.filter(o => picked.has(o.id) && o.status !== 'billed');
+  if (!chosen.length){ note('Nothing to do — those are already billed.', false); return; }
+
+  const lines = chosen.map(o => `#${o.order_no}  ${o.party || o.ac_code}  Rs. ${money(total(o))}`);
+  if (!confirm(`Make ${chosen.length} bill(s) in Value-FAS?\n\n${lines.join('\n')}`)) return;
+
+  busy = true;
+  summary();
+  note(`Queueing ${chosen.length} order(s)…`, true);
+
+  const ok = [], failed = [];
+  for (const o of chosen){
+    try{
+      const r = await fetch(`${SB_URL}/rest/v1/orders?id=eq.${encodeURIComponent(o.id)}`, {
+        method: 'PATCH',
+        headers: {...H, 'Content-Type': 'application/json', Prefer: 'return=minimal'},
+        body: JSON.stringify({status: 'billed', updated_at: new Date().toISOString()})
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      ok.push(o.order_no);
+      o.status = 'billed';
+      picked.delete(o.id);
+    }catch(e){
+      failed.push(`${o.order_no} (${e.message})`);
+    }
+  }
+
+  busy = false;
+  note(
+    (ok.length ? `Queued ${ok.length}: ${ok.join(', ')}\nThe PC will create these in Value-FAS.\n` : '')
+    + (failed.length ? `Failed ${failed.length}: ${failed.join(', ')}` : ''),
+    failed.length === 0
+  );
+  render();
+}
+
+function manualRefresh(){ note(''); load(); }
+
+load();
+setInterval(() => { if (!busy) load(); }, 15000);
+</script>
+</body></html>
