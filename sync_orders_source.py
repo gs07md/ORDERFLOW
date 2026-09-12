@@ -275,25 +275,37 @@ def billed_order_items(cur, days_back=45):
     sync cycle."""
     cutoff = date.today() - timedelta(days=days_back)
     out = {}
-    try:
-        cur.execute("""
-            SELECT t.OrdNo, t.ItemCode
-            FROM InvMast AS m INNER JOIN InvTran AS t
-              ON m.BillC = t.BillC AND m.Bill = t.Bill
-            WHERE m.Entry = 'SAL' AND m.BillDate >= ?
-              AND t.OrdNo IS NOT NULL AND t.OrdNo <> 0
-        """, (cutoff,))
-    except Exception as e:
-        print(f"[warn] Could not read billed order lines: {e}")
+    # Keep the WHERE clause plain and filter in Python: asking Access for
+    # `t.OrdNo <> 0` threw "Data type mismatch in criteria expression".
+    base = ("SELECT t.OrdNo, t.ItemCode "
+            "FROM InvMast AS m INNER JOIN InvTran AS t "
+            "ON m.BillC = t.BillC AND m.Bill = t.Bill "
+            "WHERE m.Entry = 'SAL'")
+    rows, last_err = None, None
+    for sql, params in ((base + " AND m.BillDate >= ?", (cutoff,)),
+                        (base + " AND m.BillDate >= #%s#" % cutoff.strftime("%m/%d/%Y"), ()),
+                        (base, ())):
+        try:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            break
+        except Exception as e:
+            last_err = e
+    if rows is None:
+        print(f"[warn] Could not read billed order lines: {last_err}")
         return out
-    for ord_no, item_code in cur.fetchall():
+    for ord_no, item_code in rows:
+        if ord_no in (None, 0, "", "0"):
+            continue
         try:
             key = str(int(float(ord_no)))
         except (TypeError, ValueError):
             key = str(ord_no).strip()
-        if not key:
+        if not key or key == "0":
             continue
-        out.setdefault(key, set()).add(str(item_code).strip())
+        code = str(item_code or "").strip()
+        if code:
+            out.setdefault(key, set()).add(code)
     return out
 
 
