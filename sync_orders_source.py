@@ -35,6 +35,7 @@ import time
 import json
 import urllib.request
 import urllib.error
+import urllib.parse
 
 # =====================================================================
 # CONFIG -- only touch ORDER_ENTRY_CODE if the script tells you to
@@ -261,6 +262,120 @@ def push_orders_to_supabase(new_orders):
 
 
 
+def billed_order_items(cur, days_back=45):
+    """{order_no: {ItemCode, ...}} -- every item a real Sale bill has
+    already taken off an order.
+
+    InvTran carries OrdNo back to the order it came from, so this is the
+    only reliable "these goods are already on a bill" signal: Value-FAS
+    itself never closes the order, it just leaves Entry='ORD' sitting
+    there for ever.
+
+    ONE query for everything, not one per order -- this runs on every
+    sync cycle."""
+    cutoff = date.today() - timedelta(days=days_back)
+    out = {}
+    try:
+        cur.execute("""
+            SELECT t.OrdNo, t.ItemCode
+            FROM InvMast AS m INNER JOIN InvTran AS t
+              ON m.BillC = t.BillC AND m.Bill = t.Bill
+            WHERE m.Entry = 'SAL' AND m.BillDate >= ?
+              AND t.OrdNo IS NOT NULL AND t.OrdNo <> 0
+        """, (cutoff,))
+    except Exception as e:
+        print(f"[warn] Could not read billed order lines: {e}")
+        return out
+    for ord_no, item_code in cur.fetchall():
+        try:
+            key = str(int(float(ord_no)))
+        except (TypeError, ValueError):
+            key = str(ord_no).strip()
+        if not key:
+            continue
+        out.setdefault(key, set()).add(str(item_code).strip())
+    return out
+
+
+def mark_billed_orders():
+    """Stops an order that is already on a bill from still showing as
+    something to pick.
+
+    Without this, a party's order stays 'pending' on the phone after the
+    bill has been made, and the same goods get pulled off the shelf a
+    second time. Each item that a Sale bill has already taken is flagged
+    billed:true, and when every item on the order is flagged the whole
+    order is marked billed (green).
+
+    Only orders that actually changed are written back, so after the
+    first pass this costs nothing."""
+    try:
+        url = (f"{SUPABASE_URL}/rest/v1/orders?status=neq.billed"
+               f"&select=id,order_no,status,items")
+        req = urllib.request.Request(url, headers=SB_HEADERS)
+        rows = json.loads(urllib.request.urlopen(req, timeout=30).read())
+    except Exception as e:
+        print(f"[warn] Could not read orders to check for bills: {e}")
+        return
+    if not rows:
+        return
+
+    db_path = resolve_db_path()
+    conn = pyodbc.connect(
+        r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
+        rf"DBQ={db_path};ReadOnly=1;")
+    cur = conn.cursor()
+    billed = billed_order_items(cur)
+    conn.close()
+    if not billed:
+        return
+
+    done, partial = 0, 0
+    for row in rows:
+        order_no = str(row.get("order_no") or "").strip()
+        taken = billed.get(order_no)
+        if not taken:
+            continue
+        items = row.get("items") or []
+        if not items:
+            continue
+
+        changed = False
+        for it in items:
+            is_billed = str(it.get("code") or "").strip() in taken
+            if is_billed and not it.get("billed"):
+                it["billed"] = True
+                changed = True
+
+        fully = all(str(it.get("code") or "").strip() in taken for it in items)
+        body = {}
+        if changed:
+            body["items"] = items
+        if fully and row.get("status") != "billed":
+            body["status"] = "billed"
+            body["fas_entry_started"] = True
+        if not body:
+            continue
+
+        try:
+            req = urllib.request.Request(
+                f"{SUPABASE_URL}/rest/v1/orders?id=eq."
+                f"{urllib.parse.quote(str(row['id']), safe='')}",
+                data=json.dumps(body).encode("utf-8"),
+                method="PATCH", headers=SB_HEADERS)
+            urllib.request.urlopen(req, timeout=15)
+            if fully:
+                done += 1
+            else:
+                partial += 1
+        except Exception as e:
+            print(f"[warn] Could not mark order {order_no}: {e}")
+
+    if done or partial:
+        print(f"[info] Already-billed check: {done} order(s) marked billed, "
+              f"{partial} partly billed.")
+
+
 def push_stock_to_supabase(push_all=False):
     """Push ItemMast stock (Qty, rack 'location' from ItemCtg, rate) to
     Supabase -- but ONLY items whose Qty/Rate/Location actually changed
@@ -465,12 +580,13 @@ def existing_keys(ws, last_row):
 
 def main():
     print("[version] sync_orders v7 -- stock = Opening + Receive - Issue, "
-          "batched, corrupt-xlsx safe")
+          "batched, already-billed orders closed")
     output_path = get_output_path()
     print(f"[info] Orders.xlsx will be saved to: {output_path}")
 
     new_orders = fetch_new_orders()
     push_orders_to_supabase(new_orders)
+    mark_billed_orders()
     push_stock_to_supabase(push_all="--stock-all" in sys.argv)
     wb, ws = load_or_create_workbook(output_path)
 
