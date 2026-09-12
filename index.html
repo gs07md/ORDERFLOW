@@ -98,6 +98,14 @@
   .field input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
   .field input::placeholder{ color:var(--text-dim); opacity:.55; }
   .mismatch-tag{ font-size:10.5px; color:var(--bad); margin-top:8px; font-weight:600; }
+  /* An item a Sale bill has already taken. Shown, not hidden, so it is
+     obvious WHY it is not to be picked -- and clearly out of the way. */
+  .item-row.already-billed{ background:var(--ok-bg); border-color:#B9DFC4; }
+  .item-row.already-billed .item-desc,
+  .item-row.already-billed .item-grid{ opacity:.5; }
+  .billed-tag{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.3px;
+    color:var(--ok); background:#fff; border:1px solid #B9DFC4; border-radius:999px;
+    padding:3px 10px; margin-top:6px; }
 
   /* ---- recheck table ---- */
   .recheck-row{
@@ -238,6 +246,18 @@ function orderToRow(o){
     fas_entry_started: !!o.fasEntryStarted, items: o.items
   };
 }
+function sortOrders(list){
+  // Supabase returns rows in whatever order the table hands them back, so
+  // the list came out jumbled -- 10033, 10037, 10038, 10039, then 10093,
+  // 10095. Sorted by order number here, ONCE, so every screen shows them
+  // in line.
+  return (list || []).slice().sort((a, b) => {
+    const na = Number(a.orderNo), nb = Number(b.orderNo);
+    if(Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return String(a.orderNo).localeCompare(String(b.orderNo), undefined, {numeric:true});
+  });
+}
+
 function rowToOrder(r){
   return {
     id: r.id, orderNo: r.order_no, party: r.party, acCode: r.ac_code,
@@ -296,7 +316,7 @@ async function anyUsersExist(){
 const DB = {
   load(){
     const raw = localStorage.getItem('orderflow_orders_v2');
-    if(raw) return JSON.parse(raw);
+    if(raw) return sortOrders(JSON.parse(raw));
     return [];
   },
   save(orders){
@@ -326,7 +346,7 @@ async function pullFromSupabase(){
     const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_date=eq.${today}&select=*`, {headers: SB_HEADERS});
     const rows = await res.json();
     if(!Array.isArray(rows)) return null;
-    return rows.map(rowToOrder);
+    return sortOrders(rows.map(rowToOrder));
   }catch(e){ console.error('supabase pull failed', e); return null; }
 }
 
@@ -349,9 +369,9 @@ function startLiveSync(){
     // actually take effect on every phone) -- except the ONE order the
     // person currently has open, which is kept local so a background
     // poll never clobbers input they're actively typing.
-    const newOrders = remote.map(r => (r.id === currentOrderId
+    const newOrders = sortOrders(remote.map(r => (r.id === currentOrderId
       ? (orders.find(o => o.id === r.id) || r)
-      : r));
+      : r)));
     const nextJson = JSON.stringify(newOrders);
     if(nextJson === JSON.stringify(orders)) return;   // nothing changed -- don't repaint
     orders = newOrders;
@@ -775,6 +795,8 @@ function renderOrderList(){
       </div>`;
   }).join('');
 
+  // A count on screen, so "only a few showing" is obviously a filter or a
+  // scroll position -- not the list having failed to load.
   const statusCounts = {pending:0, checking:0, ready:0, billed:0};
   orders.forEach(o => { if(statusCounts[o.status]!==undefined) statusCounts[o.status]++; });
   const filterChips = ['all','pending','checking','ready','billed'].map(s => {
@@ -794,7 +816,7 @@ function renderOrderList(){
     </div>` : ''}
     <div class="section-label">Today's orders</div>
     <div id="order-list-rows">${rows}</div>
-    <div class="fab-note">Order Value-FAS mathi manually umervi pade che abhi. Sync script connect thay pachi automatic aavse.</div>`;
+    <div class="fab-note">Order Value-FAS mathi apoap aave che. Yaadi dar 3 second e taji thay che.</div>`;
   updateStatusChipStyles();
 }
 
@@ -919,12 +941,13 @@ function renderPackingCheck(o){
     const done = it.aqty !== null && it.aqty !== undefined;
     const stk = stockLookup(it.code);
     return `
-      <div class="item-row ${mismatch?'mismatch':''}" id="row-${idx}" data-search="${(it.code+' '+it.desc).toLowerCase()}">
+      <div class="item-row ${mismatch?'mismatch':''} ${it.billed?'already-billed':''}" id="row-${idx}" data-search="${(it.code+' '+it.desc).toLowerCase()}">
         <div class="item-top">
           <div>
             <div class="item-code">${srNo+1}. ${it.code} <span style="color:${done?'var(--ok)':'var(--bad)'}; font-weight:700;">${done?'✓':'✗'}</span></div>
             <div class="item-desc">${it.desc}</div>
             ${stk ? `<div class="loc-line">📍 ${stk.location || '—'}<span class="loc-stock">STOCK ${stk.qty ?? '—'}</span></div>` : ''}
+            ${it.billed ? `<div class="billed-tag">✓ BILL MA AAVI GAYU — fari na kadho</div>` : ''}
             ${done && it.pickedBy ? `<div class="fab-note" style="margin:2px 0 0; text-align:left;">Kadhyu: ${it.pickedBy}</div>` : ''}
           </div>
         </div>
@@ -955,6 +978,7 @@ function renderPackingCheck(o){
       <input id="item-search" placeholder="Item code ya naam search karo..." oninput="filterItemRows()"
         style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
     </div>
+    ${o.items.filter(it=>it.billed).length ? `<div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ ${o.items.filter(it=>it.billed).length} item nu bill pehla thi bani gayu che — e lila ma che, fari na kadhso.</div>` : ''}
     <div class="status-banner">Har item ni Actual Qty ane Actual Rate bharo. Khali rakhso to Ordered value j use thashe. Farak hoy to row lal thai jashe. ✓/✗ batave che picker e kaam puru karyu ke nahi.</div>
     <div id="item-rows-container">${rows}</div>
     <button class="btn btn-primary" onclick="finishPacking('${o.id}')">Packing Done → Recheck</button>
@@ -972,7 +996,11 @@ function filterItemRows(){
 function renderPickerSingleItem(o){
   const sortedIdxs = locationSortedIndices(o);
   // clamp to first not-done item (in location order) so a picker never re-does a finished one
-  while(pickerIdx < sortedIdxs.length && o.items[sortedIdxs[pickerIdx]].done) pickerIdx++;
+  // Skip anything already done AND anything a bill has already taken --
+  // those goods are out of the shop, picking them again is the mistake
+  // this is here to stop.
+  while(pickerIdx < sortedIdxs.length &&
+        (o.items[sortedIdxs[pickerIdx]].done || o.items[sortedIdxs[pickerIdx]].billed)) pickerIdx++;
 
   if(pickerIdx >= sortedIdxs.length){
     // everything done -- submit and hand off to dispatcher
@@ -1145,7 +1173,7 @@ async function syncNowOnLoad(){
   if(!FIREBASE_CONFIGURED || !currentRole) return;
   const remote = await pullFromSupabase();
   if(remote === null) return;
-  orders = remote;
+  orders = sortOrders(remote);
   localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
   if(!currentOrderId) render();
 }
