@@ -103,6 +103,12 @@
   .item-row.already-billed{ background:var(--ok-bg); border-color:#B9DFC4; }
   .item-row.already-billed .item-desc,
   .item-row.already-billed .item-grid{ opacity:.5; }
+  /* Shown on the ORDER CARD itself, so "this is already on a bill in
+     Value-FAS" is visible in the list without opening the order. */
+  .card-billed{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.2px;
+    color:var(--ok); background:var(--ok-bg); border:1px solid #B9DFC4;
+    border-radius:999px; padding:2px 9px; margin-top:5px; }
+  .order-card.has-billed{ border-left:4px solid var(--ok); }
   .billed-tag{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.3px;
     color:var(--ok); background:#fff; border:1px solid #B9DFC4; border-radius:999px;
     padding:3px 10px; margin-top:6px; }
@@ -778,15 +784,22 @@ function renderOrderList(){
   const isCeo = currentRole === 'ceo';
   const rows = orders.map(o=>{
     const total = o.items.length;
-    const mismatches = o.items.filter(it => it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)))).length;
+    const mismatches = o.items.filter(it => it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)))).length;
+    // How many of this order's items a Sale bill in Value-FAS has already
+    // taken. Put on the card so nobody has to open the order to find out.
+    const billedCount = o.items.filter(it => it.billed).length;
+    const allBilled = billedCount > 0 && billedCount === total;
     const showCheckbox = isCeo && o.status === 'ready';
     return `
-      <div class="order-card" data-status="${o.status}" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')+' '+o.items.map(it=>it.code).join(' ')).toLowerCase()}" onclick="goToOrder('${o.id}')">
+      <div class="order-card ${billedCount?'has-billed':''}" data-status="${o.status}" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')+' '+o.items.map(it=>it.code).join(' ')).toLowerCase()}" onclick="goToOrder('${o.id}')">
         ${showCheckbox ? `<input type="checkbox" class="batch-bill-check" data-order-id="${o.id}" onclick="event.stopPropagation(); updateBatchBillBar();" style="width:20px; height:20px; flex:none; margin-right:2px;">` : ''}
         <div>
           <div class="no">${o.orderNo}${o.location ? ' · '+o.location : ''}${o.date ? ' · '+o.date : ''}</div>
           <div class="title">${o.party}</div>
           <div class="meta">${total} item${total>1?'s':''}${(!currentRole || currentRole!=='picker') && mismatches ? ' · '+mismatches+' mismatch'+(mismatches>1?'es':'') : ''}</div>
+          ${billedCount ? `<div class="card-billed">✓ ${allBilled
+              ? 'VALUE-FAS MA BILL BANI GAYU — na kadhso'
+              : billedCount + ' / ' + total + ' item bill ma aavi gaya'}</div>` : ''}
         </div>
         <div class="right">
           <span class="pill ${statusPillClass(o.status)}">${statusLabel(o.status)}</span>
@@ -935,10 +948,10 @@ function renderPackingCheck(o){
   const sortedIdxs = locationSortedIndices(o);
   const rows = sortedIdxs.map((idx, srNo)=>{
     const it = o.items[idx];
-    const aq = it.aqty !== null ? it.aqty : '';
+    const aq = it.aqty != null ? it.aqty : '';
     const ar = it.arate !== null ? it.arate : '';
-    const mismatch = it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
-    const done = it.aqty !== null && it.aqty !== undefined;
+    const mismatch = it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
+    const done = it.aqty != null;   // != catches null AND undefined
     const stk = stockLookup(it.code);
     return `
       <div class="item-row ${mismatch?'mismatch':''} ${it.billed?'already-billed':''}" id="row-${idx}" data-search="${(it.code+' '+it.desc).toLowerCase()}">
@@ -1067,7 +1080,7 @@ function updateItem(orderId, idx, field, value){
   if(o.status === 'pending') o.status = 'checking';
   DB.save(orders);
   const it = o.items[idx];
-  const mismatch = it.aqty!==null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
+  const mismatch = it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
   const rowEl = document.getElementById(`row-${idx}`);
   const tagEl = document.getElementById(`tag-${idx}`);
   if(rowEl) rowEl.classList.toggle('mismatch', mismatch);
@@ -1088,8 +1101,8 @@ function finishPacking(orderId){
 
 function renderRecheck(o){
   const rows = o.items.map(it=>{
-    const qtyMismatch = Number(it.aqty) !== Number(it.oqty);
-    const rateMismatch = Number(it.arate) !== Number(mrpOf(it));
+    const qtyMismatch = it.aqty != null && Number(it.aqty) !== Number(it.oqty);
+    const rateMismatch = it.arate != null && Number(it.arate) !== Number(mrpOf(it));
     const mismatch = qtyMismatch || rateMismatch;
     return `
       <div class="recheck-row ${mismatch?'mismatch':''}">
@@ -1106,7 +1119,9 @@ function renderRecheck(o){
   }).join('');
 
   const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(mrpOf(it)), 0);
-  const mismatchCount = o.items.filter(it=>Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it))).length;
+  const mismatchCount = o.items.filter(it=>
+    (it.aqty != null && Number(it.aqty)!==Number(it.oqty)) ||
+    (it.arate != null && Number(it.arate)!==Number(mrpOf(it)))).length;
 
   main.innerHTML = `
     <div class="status-banner">${mismatchCount ? '⚠ '+mismatchCount+' item ma Ordered ane Actual alag che — bill banavta pehla ek var joi levu.' : '✓ Badha item Ordered mujab j che.'}</div>
