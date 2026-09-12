@@ -1,1723 +1,1256 @@
-"""
-bill_maker.py
-=================
-ONE file. Everything to do with making a bill lives here -- it replaces
-make_bill.py AND bill_creator_watcher.py. Run it and leave it running.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>OrderFlow — Shree Giriraj Auto Parts</title>
+<style>
+  :root{
+    --bg: #F0F2F6;
+    --bg-panel: #FFFFFF;
+    --bg-raised: #F2F4F7;
+    --line: #E1E4EA;
+    --text: #14161B;
+    --text-dim: #6B7280;
+    --navy: #101A33;
+    --navy-2: #1B2A4E;
+    --accent: #2F5FDE;
+    --accent-dim: #E8EEFD;
+    --ok: #12946A;
+    --ok-bg: #E4F6EF;
+    --bad: #D6433D;
+    --bad-bg: #FCEAEA;
+    --wait-bg: #FEF0D8;
+    --wait: #B4720F;
+    --radius: 12px;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); }
+  body{ padding-bottom:84px; min-height:100vh; }
+  h1,h2,h3{ margin:0; font-weight:600; }
+  .app-header{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+    padding:16px 16px 14px;
+    box-shadow:0 2px 10px rgba(16,26,51,.18);
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .mark{ width:34px; height:34px; border-radius:9px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-weight:700; color:#FFFFFF; font-size:15px; flex:none; border:1px solid rgba(255,255,255,.18); }
+  .brand-name{ font-size:15.5px; font-weight:600; letter-spacing:.2px; color:#FFFFFF; }
+  .brand-sub{ font-size:11.5px; color:rgba(255,255,255,.62); margin-top:1px; }
 
-    python bill_maker.py                 watch the website, make every bill
-    python bill_maker.py --once          do what is queued now, then stop
-    python bill_maker.py --check         ONLY read the database and fix the
-                                         green marks. Touches no window.
-    python bill_maker.py W-01-S 9956     make one bill by hand
-    python bill_maker.py --status        what is queued / what is done
+  main{ padding:14px 16px 8px; max-width:640px; margin:0 auto; }
 
-WHY ONE FILE
-    make_bill.py and bill_creator_watcher.py were two halves that had to
-    agree with each other, and a stale copy of either one silently broke
-    billing from the phone. There is now nothing to keep in step.
+  /* ---- Order list ---- */
+  .order-card{
+    background:var(--bg-panel); border:1px solid var(--line); border-left:3px solid var(--line); border-radius:var(--radius);
+    padding:14px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px;
+    cursor:pointer; box-shadow:0 1px 3px rgba(16,24,40,.05); transition:box-shadow .15s, transform .1s;
+  }
+  .order-card:active{ background:var(--bg-raised); transform:scale(.995); }
+  .order-card .no{ font-family:var(--mono); font-size:12.5px; color:var(--text-dim); letter-spacing:.1px; }
+  .order-card .title{ font-size:15px; font-weight:650; margin-top:2px; }
+  .order-card .meta{ font-size:12.5px; color:var(--text-dim); margin-top:3px; }
+  .order-card .right{ margin-left:auto; text-align:right; flex:none; }
+  .chevron{ color:var(--text-dim); font-size:18px; }
 
-WHAT IT FIXES
-    (1) "Bill doesn't get made from the website."
-        The watcher half was a separate program that had to be restarted
-        by hand to pick up a fix. Now the loop and the bill-making are
-        the same process, so there is no second thing to restart.
+  .pill{
+    display:inline-block; padding:4px 10px; border-radius:100px; font-size:11px; font-weight:650;
+    letter-spacing:.2px;
+  }
+  .pill.pending{ background:var(--wait-bg); color:var(--wait); }
+  .pill.checking{ background:var(--accent-dim); color:var(--accent); }
+  .pill.ready{ background:var(--ok-bg); color:var(--ok); }
+  .pill.billed{ background:#EDEEF0; color:var(--text-dim); }
+  .order-card:has(.pill.pending){ border-left-color:var(--wait); }
+  .order-card:has(.pill.checking){ border-left-color:var(--accent); }
+  .order-card:has(.pill.ready){ border-left-color:var(--ok); }
+  .order-card:has(.pill.billed){ border-left-color:var(--line); }
 
-    (2)(3)(5) "It doesn't check the database."
-        Value-FAS writes the order number onto every bill line it takes
-        (InvTran.OrdNo). That is the only honest record of "this order is
-        on a bill", and this file reads it:
-            - before making a bill, to skip work already done,
-            - after Save, to confirm the bill really landed,
-            - every cycle, over ALL open orders.
-        Nothing is ever marked done because a key was pressed. It is
-        marked done because the database says so.
+  .section-label{ font-size:12px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.4px; margin:18px 2px 8px; }
 
-    (4) "When we select all, all should be made -- not one."
-        Every queued order is worked through in one pass, in order
-        number order, and the result of each is reported. One failure
-        does not stop the rest.
+  /* ---- item rows (packing check) ---- */
+  .item-row{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:12px 13px; margin-bottom:9px; transition:background .15s, border-color .15s;
+    box-shadow:0 1px 3px rgba(16,24,40,.05);
+  }
+  .item-row.mismatch{ background:var(--bad-bg); border-color:#F3B9B6; }
+  .item-top{ display:flex; justify-content:space-between; gap:10px; }
+  .item-code{ font-family:var(--mono); font-size:15.5px; font-weight:800; color:var(--accent); }
+  .item-desc{ font-size:14px; margin-top:2px; line-height:1.35; }
+  .item-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:11px; }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:10.5px; color:var(--text-dim); letter-spacing:.3px; }
+  /* Read-only cells and typed-in cells are drawn EXACTLY the same -- same
+     box, same height, same type -- so a row reads as four equal boxes
+     instead of two bits of loose text beside two grey boxes. */
+  .field .readonly, .field input{
+    border:1px solid var(--line); border-radius:8px;
+    padding:9px 10px; font-size:15px; font-family:var(--mono);
+    width:100%; box-sizing:border-box; min-height:40px; line-height:20px;
+  }
+  .field .readonly{ background:transparent; color:var(--text); font-weight:700; }
+  .field input{ background:var(--bg-raised); color:var(--text); }
+  .item-row.mismatch .field input{ border-color:var(--bad); }
+  .field input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  .field input::placeholder{ color:var(--text-dim); opacity:.55; }
+  .mismatch-tag{ font-size:10.5px; color:var(--bad); margin-top:8px; font-weight:600; }
+  /* An item a Sale bill has already taken. Shown, not hidden, so it is
+     obvious WHY it is not to be picked -- and clearly out of the way. */
+  .item-row.already-billed{ background:var(--ok-bg); border-color:#B9DFC4; }
+  .item-row.already-billed .item-desc,
+  .item-row.already-billed .item-grid{ opacity:.5; }
+  /* Shown on the ORDER CARD itself, so "this is already on a bill in
+     Value-FAS" is visible in the list without opening the order. */
+  .card-billed{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.2px;
+    color:var(--ok); background:var(--ok-bg); border:1px solid #B9DFC4;
+    border-radius:999px; padding:2px 9px; margin-top:5px; }
+  .order-card.has-billed{ border-left:4px solid var(--ok); }
+  .billed-tag{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.3px;
+    color:var(--ok); background:#fff; border:1px solid #B9DFC4; border-radius:999px;
+    padding:3px 10px; margin-top:6px; }
 
-    (6) "Bills made inside Value-FAS should go green too."
-        refresh_from_value_fas() marks any order green once a Sale bill
-        references it -- it does not care whether the bill came from the
-        phone, from this script, or was typed by hand in Value-FAS.
+  /* ---- recheck table ---- */
+  .recheck-row{
+    display:grid; grid-template-columns: 1fr auto auto; gap:8px; align-items:center;
+    padding:10px 12px; border-bottom:1px solid var(--line); font-size:13.5px;
+  }
+  .recheck-row.mismatch{ background:var(--bad-bg); }
+  .recheck-row .desc{ line-height:1.3; }
+  .recheck-row .code{ font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+  .recheck-row .colhead{ font-size:10.5px; color:var(--text-dim); text-align:right; }
+  .recheck-row .num{ font-family:var(--mono); text-align:right; min-width:64px; }
+  .recheck-row .num.diff{ color:var(--bad); font-weight:700; }
 
-HOW A BILL IS MADE
-    One party = one bill per day. If the party already has an Entry='SAL'
-    bill dated today, that bill is LOADED (Sale A/c = SAL01, bill number
-    into Invoice No, then ENTER) and the order is added to it. Only if
-    there is none does it start a new one. Then: F1 -> find the order by
-    reading the screen -> tick it -> take the out-of-stock lines back off
-    -> Select -> Alt+S -> answer FAS's dialogs -> re-read the database.
+  .summary-card{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px; margin-top:14px;
+  }
+  .summary-line{ display:flex; justify-content:space-between; font-size:13.5px; padding:5px 0; color:var(--text-dim); }
+  .summary-line.total{ color:var(--text); font-weight:700; font-size:16px; border-top:1px solid var(--line); margin-top:6px; padding-top:10px; }
+  .summary-line .val{ font-family:var(--mono); }
 
-STOCK
-    An item's stock is ItemMast.Opening + Receive - Issue, which is what
-    Value-FAS prints as IN STOCK. SitQty is 0 for every item in this
-    database and must not be used.
+  /* ---- buttons ---- */
+  .btn{
+    display:block; width:100%; text-align:center; padding:14px; border-radius:var(--radius);
+    font-size:15px; font-weight:600; border:none; cursor:pointer; margin-top:14px;
+  }
+  .btn-primary{ background:var(--accent); color:#FFFFFF; }
+  .btn-primary:active{ opacity:.85; }
+  .btn-ghost{ background:transparent; border:1px solid var(--line); color:var(--text); }
+  .btn:disabled{ opacity:.4; }
 
-LOG
-    Everything goes to bill_maker_log.txt next to this file.
-"""
+  .topbar{ display:flex; align-items:center; gap:10px; }
+  .backbtn{ background:none; border:none; color:#FFFFFF; font-size:20px; padding:2px 6px 2px 0; cursor:pointer; }
 
-import argparse
-import json
-import os
-import sys
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
-from datetime import date
-from pathlib import Path
+  /* ---- bottom tab nav ---- */
+  nav.tabbar{
+    position:fixed; bottom:0; left:0; right:0; z-index:30;
+    background:var(--bg-panel); border-top:1px solid var(--line);
+    display:flex; padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  }
+  nav.tabbar button{
+    flex:1; background:none; border:none; color:var(--text-dim); font-size:11.5px;
+    display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 2px; cursor:pointer;
+  }
+  nav.tabbar button .ico{ font-size:19px; }
+  nav.tabbar button.active{ color:var(--accent); }
 
-import pyodbc
-from pywinauto import Desktop
-from pywinauto.keyboard import send_keys
+  .empty{ text-align:center; color:var(--text-dim); font-size:13.5px; padding:40px 20px; }
+  .fab-note{ font-size:11.5px; color:var(--text-dim); text-align:center; margin:16px 2px 4px; line-height:1.5; }
+.user-name-input{ width:100%; margin-top:5px; padding:9px 10px; font-size:15px;
+  font-weight:600; border:1px solid var(--line); border-radius:8px;
+  background:var(--bg-panel); color:var(--text); }
+.loc-line{ font-size:15.5px; font-weight:800; color:var(--accent); text-align:left; margin:6px 0 0; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.loc-stock{ font-family:var(--mono); font-size:13px; font-weight:700; color:var(--text-dim); background:var(--bg-panel); border:1px solid var(--line); border-radius:6px; padding:2px 9px; }
 
-try:
-    from pywinauto import mouse
-except Exception:
-    mouse = None
+  .status-banner{
+    background:var(--wait-bg); border:1px solid #F0DFA3; color:var(--wait); font-size:11.5px;
+    border-radius:8px; padding:8px 11px; margin-bottom:14px; line-height:1.5;
+  }
+  .hidden{ display:none !important; }
 
-try:
-    from pywinauto.findwindows import find_windows
-    from pywinauto.uia_element_info import UIAElementInfo
-    from pywinauto.controls.uiawrapper import UIAWrapper
-    _FAST_LOOKUP = True
-except Exception:
-    _FAST_LOOKUP = False
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:40; display:flex; align-items:flex-end;
+  }
+  .modal{
+    background:var(--bg-panel); border-top:1px solid var(--line); border-radius:16px 16px 0 0;
+    width:100%; padding:18px 16px calc(18px + env(safe-area-inset-bottom)); max-height:80vh; overflow:auto;
+  }
+  .modal h3{ margin-bottom:12px; }
+  .modal .field{ margin-bottom:10px; }
+  .modal .field label{ margin-bottom:3px; }
+  .modal .field input{ font-family:var(--sans); font-size:14.5px; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 
-try:
-    import pytesseract
-    from PIL import ImageGrab, Image
-    default_tesseract = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    if os.path.exists(default_tesseract):
-        pytesseract.pytesseract.tesseract_cmd = default_tesseract
-except ImportError:
-    print("[error] Run: pip install pytesseract pillow --break-system-packages")
-    sys.exit(1)
+  /* ---- role picker ---- */
+  .role-card{
+    background:var(--bg-panel); border:2px solid var(--line); border-radius:var(--radius);
+    padding:20px; margin-bottom:12px; cursor:pointer; text-align:center;
+  }
+  .role-card:active{ border-color:var(--accent); background:var(--accent-dim); }
+  .role-card .role-title{ font-size:16px; font-weight:700; margin-bottom:4px; }
+  .role-card .role-desc{ font-size:12.5px; color:var(--text-dim); }
+  .role-badge{
+    display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.3px;
+    color:#FFFFFF; background:rgba(255,255,255,.16); padding:4px 10px; border-radius:100px;
+    cursor:pointer; border:1px solid rgba(255,255,255,.2);
+  }
+  .status-chip{
+    flex:none; font-size:12px; font-weight:600; padding:7px 13px; border-radius:100px;
+    border:1px solid var(--line); cursor:pointer; white-space:nowrap;
+  }
+</style>
+</head>
+<body>
 
-# --------------------------------------------------------------------
-# Settings
-# --------------------------------------------------------------------
-SALE_AC_FIELD_AUTO_ID = "107"
-SALE_AC_CODE = "SAL01"
-INVOICE_NO_FIELD_AUTO_ID = "108"
-PARTY_FIELD_AUTO_ID = "106"
-SAVE_BUTTON_AUTO_ID = "85"
-DB_BASE = r"H:\VALUE"
+<header class="app-header">
+  <div id="headerContent">
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div>
+        <div class="brand-name">OrderFlow</div>
+        <div class="brand-sub">Shree Giriraj Auto Parts — order → pack check → bill</div>
+      </div>
+    </div>
+  </div>
+</header>
 
-SUPABASE_URL = "https://mzzieomklvphwfwyiqjn.supabase.co"
-SUPABASE_KEY = "sb_publishable_NUY-qCvUPIUoShzYZdaqZQ_c3z-Olco"
-SB_HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
+<main id="main"></main>
+
+<nav class="tabbar">
+  <button data-tab="orders" class="active"><span class="ico">▤</span>Orders</button>
+</nav>
+
+<div id="modalRoot"></div>
+
+<script>
+/* =========================================================================
+   DATA LAYER -- Supabase (Postgres + REST via PostgREST).
+   Swapped from Firestore because the free Firestore tier counts every
+   single document read against a small daily quota, which a polling
+   app like this blows through in hours. Supabase's free tier has no
+   such per-read quota -- just storage/bandwidth ceilings this app is
+   nowhere close to.
+   ========================================================================= */
+const SUPABASE_URL = "https://mzzieomklvphwfwyiqjn.supabase.co";
+const SUPABASE_KEY = "sb_publishable_NUY-qCvUPIUoShzYZdaqZQ_c3z-Olco";
+const SB_HEADERS = {
+  "apikey": SUPABASE_KEY,
+  "Authorization": `Bearer ${SUPABASE_KEY}`,
+  "Content-Type": "application/json"
+};
+const FIREBASE_CONFIGURED = true; // kept as the flag name the rest of the app checks
+
+function orderToRow(o){
+  return {
+    id: o.id, order_no: o.orderNo, party: o.party, ac_code: o.acCode || null,
+    location: o.location || null, order_date: o.date, status: o.status,
+    fas_entry_started: !!o.fasEntryStarted, items: o.items
+  };
 }
-ORDERS_URL = f"{SUPABASE_URL}/rest/v1/orders"
-
-CHECK_EVERY_SECONDS = 5
-BILLED_LOOKBACK_DAYS = 45      # how far back to scan Sale bills
-PER_ORDER_TIMEOUT = 180        # a single order should never take longer
-
-# STOCK = Opening + Receive - Issue. Checked against nine items whose IN
-# STOCK figures Value-FAS printed: 1000, 1450, 1500, 250, 130, 108, 40,
-# 470, 170 -- nine out of nine. NOT SitQty, which is 0 for everything.
-STOCK_COLUMNS = ("Opening", "Receive", "Issue")
-STOCK_EXPR_HUMAN = "Opening + Receive - Issue"
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-LOG_PATH = os.path.join(HERE, "bill_maker_log.txt")
-
-
-def log(msg=""):
-    line = f"{time.strftime('%H:%M:%S')} {msg}" if msg else ""
-    print(line)
-    try:
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write((f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}" if msg else "") + "\n")
-    except Exception:
-        pass
-
-
-# --------------------------------------------------------------------
-# Value-FAS database (read-only)
-# --------------------------------------------------------------------
-
-def resolve_db_path():
-    today = date.today()
-    fy = today.year if today.month >= 4 else today.year - 1
-    folder = f"GAP{fy % 100:02d}"
-    path = Path(DB_BASE) / folder / f"{folder}.MDB"
-    if path.exists():
-        return str(path)
-    base = Path(DB_BASE)
-    for entry in sorted(base.iterdir()):
-        if entry.is_dir() and entry.name.upper().startswith("GAP"):
-            candidate = entry / f"{entry.name}.MDB"
-            if candidate.exists():
-                return str(candidate)
-    raise RuntimeError(f"No GAP*.MDB found under {DB_BASE}")
-
-
-def db_connect():
-    db_path = resolve_db_path()
-    conn_str = (
-        r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
-        rf"DBQ={db_path};ReadOnly=1;"
-    )
-    return pyodbc.connect(conn_str)
-
-
-
-
-# ====================================================================
-# THE DATABASE IS THE TRUTH
-# ====================================================================
-
-def todays_bill_for_party(account_code):
-    """The party's real Sale bill number for today, or None."""
-    try:
-        conn = db_connect()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT Bill FROM InvMast
-            WHERE Entry='SAL' AND AcCode=? AND BillDate = DATE()
-            ORDER BY BillDate DESC
-        """, (account_code,))
-        row = cur.fetchone()
-        conn.close()
-        return str(int(row[0])) if row else None
-    except Exception as e:
-        log(f"[warn] Could not look up today's bill for {account_code}: {e}")
-        return None
-
-
-def billed_item_codes(days_back=BILLED_LOOKBACK_DAYS):
-    """{order_no: {ItemCode, ...}} -- every item a real Sale bill has
-    already taken off an order.
-
-    This is the whole answer to "has this been billed?". Value-FAS never
-    closes an order: it leaves Entry='ORD' sitting there for ever. What
-    it DOES do is write the order number onto each bill line it takes
-    (InvTran.OrdNo). So the presence of Sale lines pointing at an order
-    is the only honest record that the goods are on a bill.
-
-    ONE query for the whole shop, not one per order.
-
-    The WHERE clause is kept as plain as possible and the rows are
-    filtered in Python instead: asking Access for `t.OrdNo <> 0` threw
-    "Data type mismatch in criteria expression", and there is nothing to
-    gain by arguing with it. Three shapes are tried in order, so a date
-    the driver dislikes still leaves a working query."""
-    from datetime import timedelta
-    cutoff = date.today() - timedelta(days=days_back)
-    base = ("SELECT t.OrdNo, t.ItemCode "
-            "FROM InvMast AS m INNER JOIN InvTran AS t "
-            "ON m.BillC = t.BillC AND m.Bill = t.Bill "
-            "WHERE m.Entry = 'SAL'")
-    attempts = [
-        (base + " AND m.BillDate >= ?", (cutoff,)),
-        (base + " AND m.BillDate >= #%s#" % cutoff.strftime("%m/%d/%Y"), ()),
-        (base, ()),
-    ]
-
-    out = {}
-    rows = None
-    last_err = None
-    try:
-        conn = db_connect()
-        cur = conn.cursor()
-        for sql, params in attempts:
-            try:
-                cur.execute(sql, params)
-                rows = cur.fetchall()
-                break
-            except Exception as e:
-                last_err = e
-                continue
-        conn.close()
-    except Exception as e:
-        log(f"[warn] Could not open the database: {e}")
-        return out
-
-    if rows is None:
-        log(f"[warn] Could not read billed lines: {last_err}")
-        return out
-
-    for ord_no, item_code in rows:
-        if ord_no in (None, 0, "", "0"):
-            continue
-        key = _order_key(ord_no)
-        if not key or key == "0":
-            continue
-        code = str(item_code or "").strip()
-        if code:
-            out.setdefault(key, set()).add(code)
-    return out
-
-
-def _order_key(v):
-    try:
-        return str(int(float(v)))
-    except (TypeError, ValueError):
-        return str(v or "").strip()
-
-
-def order_stock(order_no):
-    """(items, zero_items) for one order, with the real stock figure.
-
-    Returns (None, None) when the query could not be run. The three
-    columns are added up in Python so a NULL is treated as 0 instead of
-    making the whole row NULL."""
-    try:
-        conn = db_connect()
-        cur = conn.cursor()
-        sql = """
-            SELECT t.ItemCode, im.ItemName,
-                   im.Opening, im.Receive, im.Issue, t.Qty
-            FROM ((InvMast AS m
-                  INNER JOIN InvTran AS t ON m.BillC = t.BillC AND m.Bill = t.Bill)
-                  INNER JOIN ItemMast AS im ON t.ItemCode = im.ItemCode)
-            WHERE m.Entry = 'ORD' AND m.Book = 'SAL' AND m.Bill = ?
-        """
-        rows = None
-        for param in (float(order_no), str(order_no)):
-            try:
-                cur.execute(sql, (param,))
-                rows = cur.fetchall()
-                break
-            except Exception:
-                continue
-        conn.close()
-        if rows is None:
-            return None, None
-
-        def f(v):
-            try:
-                return float(v or 0)
-            except (TypeError, ValueError):
-                return 0.0
-
-        items = [{"code": str(c).strip(), "name": (n or "").strip(),
-                  "stock": f(o) + f(r) - f(i), "qty": q}
-                 for c, n, o, r, i, q in rows]
-        return items, [i for i in items if i["stock"] <= 0]
-    except Exception as e:
-        log(f"[warn] Could not read stock for order {order_no}: {e}")
-        return None, None
-
-
-def order_is_billed(order_no, billed_map=None):
-    """(codes_on_a_bill, how_many_lines) for one order."""
-    if billed_map is None:
-        billed_map = billed_item_codes()
-    return billed_map.get(_order_key(order_no), set())
-
-
-# ====================================================================
-# The website
-# ====================================================================
-
-def sb_get(query):
-    req = urllib.request.Request(f"{ORDERS_URL}?{query}", headers=SB_HEADERS)
-    return json.loads(urllib.request.urlopen(req, timeout=30).read())
-
-
-def sb_patch(row_id, body):
-    req = urllib.request.Request(
-        f"{ORDERS_URL}?id=eq.{urllib.parse.quote(str(row_id), safe='')}",
-        data=json.dumps(body).encode("utf-8"),
-        method="PATCH", headers=SB_HEADERS)
-    urllib.request.urlopen(req, timeout=20)
-
-
-def mark_done(row, why=""):
-    """GREEN. Only ever called after the database has confirmed it."""
-    try:
-        sb_patch(row["id"], {"status": "billed", "fas_entry_started": True,
-                             "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
-        log(f"[green] Order {row.get('order_no')} -> billed{(' (' + why + ')') if why else ''}")
-        return True
-    except Exception as e:
-        log(f"[warn] Could not mark order {row.get('order_no')} green: {e}")
-        return False
-
-
-def mark_back_to_pending(row, why=""):
-    try:
-        sb_patch(row["id"], {"status": "pending", "fas_entry_started": False,
-                             "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
-        log(f"[info] Order {row.get('order_no')} put back to pending{(' -- ' + why) if why else ''}")
-    except Exception as e:
-        log(f"[warn] Could not reset order {row.get('order_no')}: {e}")
-
-
-def refresh_from_value_fas(billed_map=None):
-    """Bring every open order's green mark in line with the database.
-
-    This is what makes a bill typed BY HAND in Value-FAS turn the order
-    green on the phone too -- it does not care where the bill came from.
-    Items already taken by a bill are flagged so a picker does not pull
-    the same goods twice.
-
-    Only rows that actually changed are written, so once things are in
-    step this costs nothing."""
-    try:
-        rows = sb_get("status=neq.billed&select=id,order_no,status,items")
-    except Exception as e:
-        log(f"[warn] Could not read orders from the website: {e}")
-        return 0, 0
-    if not rows:
-        return 0, 0
-    if billed_map is None:
-        billed_map = billed_item_codes()
-    if not billed_map:
-        return 0, 0
-
-    full, partial = 0, 0
-    for row in rows:
-        taken = billed_map.get(_order_key(row.get("order_no")), set())
-        if not taken:
-            continue
-        items = row.get("items") or []
-        if not items:
-            continue
-        changed = False
-        for it in items:
-            if str(it.get("code") or "").strip() in taken and not it.get("billed"):
-                it["billed"] = True
-                changed = True
-        every = all(str(it.get("code") or "").strip() in taken for it in items)
-        body = {}
-        if changed:
-            body["items"] = items
-        if every and row.get("status") != "billed":
-            body["status"] = "billed"
-            body["fas_entry_started"] = True
-        if not body:
-            continue
-        try:
-            sb_patch(row["id"], body)
-            if every:
-                full += 1
-                log(f"[green] Order {row.get('order_no')} is on a bill in "
-                    f"Value-FAS -> billed")
-            else:
-                partial += 1
-        except Exception as e:
-            log(f"[warn] Could not update order {row.get('order_no')}: {e}")
-    if full or partial:
-        log(f"[info] Database check: {full} order(s) went green, "
-            f"{partial} partly billed.")
-    return full, partial
-
-
-def queued_orders():
-    """Orders the phone has asked for, oldest number first.
-
-    'billed + not started' is the queue signal Bill Maker writes when
-    somebody taps Make Bills."""
-    try:
-        rows = sb_get("status=eq.billed&fas_entry_started=eq.false"
-                      "&select=id,order_no,party,ac_code,order_date,status,items")
-    except Exception as e:
-        log(f"[warn] Could not read the queue: {e}")
-        return []
-    out = [r for r in rows if str(r.get("ac_code") or "").strip()]
-    for r in rows:
-        if not str(r.get("ac_code") or "").strip():
-            log(f"[skip] Order {r.get('order_no')} has no account code.")
-    out.sort(key=lambda r: (str(r.get("order_date") or ""),
-                            int(_order_key(r.get("order_no")) or 0)))
-    return out
-
-
-# --------------------------------------------------------------------
-# Windows / Value-FAS screen helpers
-# --------------------------------------------------------------------
-
-def desktop_windows():
-    """Full UIA enumeration -- measured at ~2s on this machine, so it is
-    only a fallback for when the fast win32 path finds nothing."""
-    try:
-        return Desktop(backend="uia").windows()
-    except Exception:
-        return []
-
-
-def wrap_handle(hwnd):
-    """Wrap a raw HWND as a UIA element without enumerating anything."""
-    if not _FAST_LOOKUP:
-        return None
-    try:
-        return UIAWrapper(UIAElementInfo(hwnd))
-    except Exception:
-        return None
-
-
-def fast_find_handles(title=None, title_re=None):
-    """Raw HWNDs via win32 EnumWindows -- no UIA, no wrapping. Used for
-    'is there a popup?' checks, which happen many times per save."""
-    if not _FAST_LOOKUP:
-        return []
-    try:
-        kwargs = {"top_level_only": True, "visible_only": True}
-        if title is not None:
-            kwargs["title"] = title
-        if title_re is not None:
-            kwargs["title_re"] = title_re
-        return list(find_windows(**kwargs))
-    except Exception:
-        return []
-
-
-def fast_find_window(title=None, title_re=None):
-    """Finds a top-level window via win32 EnumWindows.
-
-    Desktop(backend='uia').windows() walks the whole UIA tree and takes
-    ~2 seconds here. EnumWindows answers the same question in well under
-    a millisecond, which matters because the save step checks for a
-    popup several times."""
-    for hwnd in fast_find_handles(title=title, title_re=title_re):
-        wrapped = wrap_handle(hwnd)
-        if wrapped is not None:
-            return wrapped
-    return None
-
-
-def pick_window(windows, predicate):
-    for w in windows:
-        try:
-            if predicate(w.window_text()):
-                return w
-        except Exception:
-            pass
-    return None
-
-
-def find_main_fas_window(windows=None):
-    if windows is None:
-        fast = fast_find_window(title_re=r"^\[ FAS \].*ESTIMATE.*")
-        if fast is not None:
-            return fast
-    return pick_window(
-        windows if windows is not None else desktop_windows(),
-        lambda t: t.startswith("[ FAS ]") and "ESTIMATE" in t,
-    )
-
-
-def find_window_by_exact_title(title, windows=None):
-    if windows is None:
-        fast = fast_find_window(title=title)
-        if fast is not None:
-            return fast
-    return pick_window(
-        windows if windows is not None else desktop_windows(),
-        lambda t: t == title,
-    )
-
-
-def iter_controls(window, max_depth=4):
-    """Breadth-first walk with a depth cap.
-
-    descendants() walks the ENTIRE tree -- with a 28-row item grid that
-    is a few hundred elements, and it is where most of the runtime went.
-    Everything this script needs sits within a few levels of the form."""
-    level = [window]
-    depth = 0
-    while level and depth < max_depth:
-        nxt = []
-        for node in level:
-            try:
-                kids = node.children()
-            except Exception:
-                continue
-            for k in kids:
-                yield k
-                nxt.append(k)
-        level = nxt
-        depth += 1
-
-
-def find_control_by_auto_id(window, auto_id, max_depth=4):
-    for ctrl in iter_controls(window, max_depth):
-        try:
-            if ctrl.element_info.automation_id == auto_id:
-                return ctrl
-        except Exception:
-            pass
-    return None
-
-
-def find_control_by_text(window, text, max_depth=4):
-    for ctrl in iter_controls(window, max_depth):
-        try:
-            if ctrl.window_text() == text:
-                return ctrl
-        except Exception:
-            pass
-    return None
-
-
-def safe_focus(win, settle=0.12):
-    try:
-        win.set_focus()
-        time.sleep(settle)
-        return True
-    except Exception:
-        return False
-
-
-def find_fas_popup(win=None):
-    """Is a FAS message box on screen right now?
-
-    Pure win32 EnumWindows. The old version walked Sale Entry's UIA
-    children first -- a cross-process call per child over a 28-row grid
-    -- and it ran several times per save. That single change is most of
-    the save speed-up."""
-    for hwnd in fast_find_handles(title="FAS"):
-        wrapped = wrap_handle(hwnd)
-        if wrapped is not None:
-            return wrapped
-    return None
-
-
-def popup_message(popup):
-    """Everything written on a FAS dialog, as one string."""
-    parts = []
-    try:
-        for c in iter_controls(popup, 4):
-            try:
-                t = c.window_text()
-            except Exception:
-                continue
-            if t and t.strip() and _norm_btn(t) not in ("ok", "yes", "no", "cancel"):
-                parts.append(t.strip())
-    except Exception:
-        pass
-    return " ".join(parts)
-
-
-def _norm_btn(text):
-    return (text or "").replace("&", "").strip().lower()
-
-
-def click_popup_button(popup, wants):
-    """Clicks the first of `wants` that is on the dialog. Matching
-    ignores case and the '&' VB6 puts in front of the shortcut letter,
-    which is what made 'No' unmatchable before."""
-    buttons = []
-    for c in iter_controls(popup, 4):
-        try:
-            buttons.append((_norm_btn(c.window_text()), c))
-        except Exception:
-            pass
-    for want in wants:
-        for norm, ctrl in buttons:
-            if norm == want.lower():
-                try:
-                    ctrl.click_input()
-                    return want
-                except Exception:
-                    pass
-    return None
-
-
-def dismiss_popups(win, max_popups=10, label="popup", settle=0.30):
-    """Answers any FAS dialogs. Returns a list of what was answered:
-    [{'kind','button','message'}, ...]
-
-    WHICH BUTTON
-        The dialog is READ before a button is picked. "Want to Print
-        6946 ?" gets **No** -- printing is not wanted, and the old code
-        could not match that button at all because VB6 reports it as
-        '&No'. Anything else gets OK, or Yes if there is no OK.
-
-    Absence of a dialog is confirmed by polling rather than one look,
-    but each look is a win32 EnumWindows call, so polling costs
-    nothing."""
-    answered = []
-    for _ in range(max_popups):
-        popup = None
-        deadline = time.time() + settle
-        while True:
-            popup = find_fas_popup(win)
-            if popup is not None or time.time() >= deadline:
-                break
-            time.sleep(0.04)
-        if popup is None:
-            break
-
-        msg = popup_message(popup)
-        low = msg.lower()
-        if "print" in low:
-            kind, wants = "print", ("No", "Cancel")
-        else:
-            kind, wants = "other", ("OK", "Yes", "No")
-
-        clicked = click_popup_button(popup, wants)
-        if clicked is None:
-            print(f"[warn] A {label} is on screen and none of its buttons "
-                  f"could be clicked: \"{msg[:70]}\"")
-            break
-
-        print(f"[info] Dialog: \"{msg[:60]}\" -> clicked {clicked}")
-        answered.append({"kind": kind, "button": clicked, "message": msg})
-        time.sleep(0.12)
-    return answered
-
-
-def safe_rectangle(win, retries=5, delay=0.3):
-    last_err = None
-    for _ in range(retries):
-        try:
-            return win.rectangle()
-        except Exception as e:
-            last_err = e
-            time.sleep(delay)
-    raise last_err
-
-
-def clear_form(win):
-    """Presses Clear so no half-typed state is left behind."""
-    btn = find_control_by_text(win, "Clear")
-    if not btn:
-        return
-    try:
-        btn.click_input()
-        time.sleep(0.5)
-        dismiss_popups(win, max_popups=3, label="clear-confirm")
-    except Exception:
-        pass
-
-
-def scan_controls(win):
-    """ONE walk of the UIA tree collecting everything the run needs.
-
-    Walking the tree is by far the slowest thing here (seconds), so it
-    is done once instead of once per lookup."""
-    wanted_auto = {
-        SALE_AC_FIELD_AUTO_ID,
-        INVOICE_NO_FIELD_AUTO_ID,
-        PARTY_FIELD_AUTO_ID,
-        SAVE_BUTTON_AUTO_ID,
+function sortOrders(list){
+  // Supabase returns rows in whatever order the table hands them back, so
+  // the list came out jumbled -- 10033, 10037, 10038, 10039, then 10093,
+  // 10095. Sorted by order number here, ONCE, so every screen shows them
+  // in line.
+  return (list || []).slice().sort((a, b) => {
+    const na = Number(a.orderNo), nb = Number(b.orderNo);
+    if(Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return String(a.orderNo).localeCompare(String(b.orderNo), undefined, {numeric:true});
+  });
+}
+
+function rowToOrder(r){
+  return {
+    id: r.id, orderNo: r.order_no, party: r.party, acCode: r.ac_code,
+    location: r.location, date: r.order_date, status: r.status,
+    fasEntryStarted: r.fas_entry_started, items: r.items || []
+  };
+}
+
+async function getUser(phone){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?phone=eq.${encodeURIComponent(phone)}&select=*`, {headers: SB_HEADERS});
+    const rows = await res.json();
+    return rows[0] || null;
+  }catch(e){ console.error('getUser failed', e); return null; }
+}
+
+function esc(x){
+  return String(x ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function patchUser(phone, fields){
+  // PATCH touches ONLY the fields given. setUser() posts the whole row,
+  // so calling it with no name (as the role dropdown used to) wiped the
+  // person's name every time their role was changed.
+  try{
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/users?phone=eq.${encodeURIComponent(phone)}`,
+      {method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(fields)});
+    return res.ok;
+  }catch(e){ console.error('patchUser failed', e); return false; }
+}
+
+async function setUser(phone, role, name){
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+      method: 'POST',
+      headers: {...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates'},
+      body: JSON.stringify({phone, role, name: name || ''})
+    });
+  }catch(e){ console.error('setUser failed', e); }
+}
+
+async function listUsers(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?select=*`, {headers: SB_HEADERS});
+    return await res.json();
+  }catch(e){ console.error('listUsers failed', e); return []; }
+}
+
+async function anyUsersExist(){
+  const users = await listUsers();
+  return users.length > 0;
+}
+
+const DB = {
+  load(){
+    const raw = localStorage.getItem('orderflow_orders_v2');
+    if(raw) return sortOrders(JSON.parse(raw));
+    return [];
+  },
+  save(orders){
+    localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
+    if(FIREBASE_CONFIGURED) pushAllToSupabase(orders);
+  }
+};
+
+async function pushAllToSupabase(orders){
+  for(const order of orders){
+    try{
+      await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+        method: 'POST',
+        headers: {...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates'},
+        body: JSON.stringify(orderToRow(order))
+      });
+    }catch(e){ console.error('supabase push failed', order.id, e); }
+  }
+}
+
+async function pullFromSupabase(){
+  if(!FIREBASE_CONFIGURED) return null;
+  try{
+    const today = new Date().toISOString().slice(0,10);
+    // Filter by today's date server-side -- cheaper and faster than
+    // pulling every historical order and filtering in the browser.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_date=eq.${today}&select=*`, {headers: SB_HEADERS});
+    const rows = await res.json();
+    if(!Array.isArray(rows)) return null;
+    return sortOrders(rows.map(rowToOrder));
+  }catch(e){ console.error('supabase pull failed', e); return null; }
+}
+
+// Poll for changes from other devices (Value-FAS sync script, other phones)
+function startLiveSync(){
+  if(!FIREBASE_CONFIGURED) return;
+  setInterval(async ()=>{
+    const remote = await pullFromSupabase();
+    // Refresh stock (item location, qty, rate) on the SAME cycle as
+    // orders -- so location data is never more stale than the orders
+    // themselves. Runs alongside the order pull, not gated behind the
+    // old 15-min cache.
+    fetchAllStock().then(fresh => {
+      stockCache = fresh;
+      try{ localStorage.setItem('orderflow_stock_cache', JSON.stringify({ts: Date.now(), data: fresh})); }catch(e){}
+    }).catch(()=>{});
+    if(remote === null) return;
+    // Supabase is the source of truth. Replace local orders with the
+    // remote list every poll (so deletions/cleanups on the server side
+    // actually take effect on every phone) -- except the ONE order the
+    // person currently has open, which is kept local so a background
+    // poll never clobbers input they're actively typing.
+    const newOrders = sortOrders(remote.map(r => (r.id === currentOrderId
+      ? (orders.find(o => o.id === r.id) || r)
+      : r)));
+    const nextJson = JSON.stringify(newOrders);
+    if(nextJson === JSON.stringify(orders)) return;   // nothing changed -- don't repaint
+    orders = newOrders;
+    localStorage.setItem('orderflow_orders_v2', nextJson);
+    if(!currentOrderId) render();
+  }, 3000);
+}
+
+function seedData(){
+  const orders = [
+    {
+      id: 'ord1',
+      orderNo: 'C-031',
+      party: 'Retail Counter',
+      date: '2026-09-02',
+      status: 'pending', // pending -> checking -> ready -> billed
+      items: [
+        {code:'24681', desc:'bos-4-T OIL 10W/30 800ML w/o copan', oqty:30, mrp:454, aqty:null, arate:null},
+        {code:'UMC-001A', desc:'IF-SUP SPL CHAIN KIT', oqty:1, mrp:730, aqty:null, arate:null},
+        {code:'1487B', desc:'KICK LEVER SPL/PASSION', oqty:5, mrp:340, aqty:null, arate:null},
+        {code:'2217A', desc:'LINK BUSH SET STEEL/BOLT ACTIVA-O/M', oqty:10, mrp:172, aqty:null, arate:null},
+        {code:'X150', desc:'MX-ACTIVA N/M ACC CABLE MAESTRO', oqty:10, mrp:258, aqty:null, arate:null},
+        {code:'X648', desc:'MX-PUL-UG3-DIJ CLUTCH CABLE 150/180/DIS', oqty:10, mrp:150, aqty:null, arate:null},
+        {code:'X7106', desc:'MX-FACINO ACC CABLE ALPHA/RAY-ZR/ALPH', oqty:5, mrp:281, aqty:null, arate:null},
+      ]
+    },
+    {
+      id: 'ord2',
+      orderNo: 'R-207',
+      party: 'Battery Parcel',
+      date: '2026-09-02',
+      status: 'pending',
+      items: [
+        {code:'SAP-0195', desc:'FUSE BOX ASSY = HH', oqty:100, mrp:26.52, aqty:null, arate:null},
+        {code:'X651', desc:'MX-SUP-SPL ACC CABLE SPL/PAS-PRO', oqty:10, mrp:45.77, aqty:null, arate:null},
+        {code:'X735', desc:'MX-SPL ACC CABLE', oqty:10, mrp:47.63, aqty:null, arate:null},
+        {code:'X736', desc:'MX-SPL CLUTCH CABLE', oqty:10, mrp:57.44, aqty:null, arate:null},
+      ]
     }
-    found = {"auto": {}, "grid": None}
-
-    def sweep(depth):
-        # Only element_info is touched here -- reading window_text() on
-        # every control is a separate cross-process call each time and
-        # nothing in the run needs it.
-        for ctrl in iter_controls(win, depth):
-            try:
-                info = ctrl.element_info
-                aid = info.automation_id
-                if aid in wanted_auto and aid not in found["auto"]:
-                    found["auto"][aid] = ctrl
-                elif found["grid"] is None and info.class_name == "MSFlexGridWndClass":
-                    found["grid"] = ctrl
-            except Exception:
-                pass
-            # Stop the moment everything is in hand.
-            if len(found["auto"]) == len(wanted_auto) and found["grid"] is not None:
-                return True
-        return False
-
-    if not sweep(4):
-        # Shallow pass missed something -- only then pay for a deep walk.
-        if INVOICE_NO_FIELD_AUTO_ID not in found["auto"] or found["grid"] is None:
-            sweep(8)
-    return found
-
-
-def fill_sale_ac(win, ctrls=None):
-    """Sale A/c = SAL01. This is what makes Value-FAS populate the
-    Invoice No field (and the Tax field) at all."""
-    field = (ctrls or {}).get("auto", {}).get(SALE_AC_FIELD_AUTO_ID)
-    if field is None:
-        field = find_control_by_auto_id(win, SALE_AC_FIELD_AUTO_ID)
-    if not field:
-        print("[warn] Sale A/c field not found.")
-        return
-    try:
-        current = field.window_text().strip()
-    except Exception:
-        current = ""
-    if current:
-        print(f"[info] Sale A/c already set: '{current}'")
-        return
-    print(f"[info] Filling Sale A/c = '{SALE_AC_CODE}'...")
-    field.click_input()
-    field.type_keys("^a", pause=0.02)
-    field.type_keys(SALE_AC_CODE, pause=0.02)
-    time.sleep(0.20)
-    field.type_keys("{ENTER}", pause=0.02)
-    time.sleep(0.25)
-
-
-# --------------------------------------------------------------------
-# Reading the screen (OCR)
-# --------------------------------------------------------------------
-
-def ocr_tokens(bbox, scale=4):
-    img = ImageGrab.grab(bbox=bbox)
-    img = img.resize((img.width * scale, img.height * scale), Image.LANCZOS)
-    return pytesseract.image_to_data(
-        img, output_type=pytesseract.Output.DICT, config="--psm 6"
-    )
-
-
-def save_debug_shot(win, name):
-    """Grabs the Sale Entry window to a PNG next to this script, so a
-    geometry problem can be looked at instead of guessed about."""
-    try:
-        rect = safe_rectangle(win)
-        img = ImageGrab.grab(bbox=(rect.left, rect.top, rect.right, rect.bottom))
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            f"debug_{name}.png")
-        img.save(path)
-        return path
-    except Exception:
-        return None
-
-
-def read_mode_badge(win, rect=None):
-    """OCRs just the Adding/Editing badge in the top-right of Sale
-    Entry. A small crop keeps this at a few hundredths of a second --
-    OCRing the whole header strip was costing far more."""
-    if rect is None:
-        rect = safe_rectangle(win)
-    w = rect.right - rect.left
-    h = rect.bottom - rect.top
-    box = (
-        rect.left + int(w * 0.62),
-        rect.top + int(h * 0.025),
-        rect.right,
-        rect.top + int(h * 0.090),
-    )
-    data = ocr_tokens(box, scale=3)
-    return " ".join(t.strip() for t in data["text"] if t.strip())
-
-
-def verify_loaded(win, timeout=5.0):
-    """Returns (status, detail) where status is one of:
-        'loaded'  -- the form is in Editing mode, safe to add to
-        'adding'  -- still a NEW bill; saving would duplicate. Stop.
-        'unknown' -- could not read the badge either way.
-
-    Only OCR is used. Reading the fields through pywinauto after the
-    lookup repaints the form always comes back empty, so attempting it
-    just burned a second or two per poll for nothing."""
-    last_detail = ""
-    rect = None
-    try:
-        rect = safe_rectangle(win)
-    except Exception:
-        pass
-
-    deadline = time.time() + timeout
-    while True:
-        try:
-            text = read_mode_badge(win, rect)
-            if text:
-                last_detail = f"badge={text[:40]}"
-            if "Editing" in text:
-                return "loaded", last_detail
-            if "Adding" in text:
-                return "adding", last_detail
-        except Exception as e:
-            last_detail = f"(OCR failed: {e})"
-
-        if time.time() >= deadline:
-            return "unknown", last_detail
-        time.sleep(0.15)
-
-
-def load_existing_bill(win, bill_no, ctrls=None):
-    """Sale A/c, then the bill number typed ONCE into Invoice No,
-    then ENTER. Nothing else."""
-    fill_sale_ac(win, ctrls)
-
-    field = (ctrls or {}).get("auto", {}).get(INVOICE_NO_FIELD_AUTO_ID)
-    if field is None:
-        field = find_control_by_auto_id(win, INVOICE_NO_FIELD_AUTO_ID)
-    if not field:
-        print("[error] Could not find the Invoice No field.")
-        return False
-
-    print(f"[info] Typing bill number '{bill_no}' into Invoice No, then ENTER...")
-    field.click_input()
-    time.sleep(0.06)
-    # Select whatever auto-number is sitting there (e.g. 6889) so the
-    # typed digits replace it. Home + Shift+End works in VB6 text boxes
-    # where Ctrl+A sometimes does nothing.
-    field.type_keys("{HOME}+{END}", pause=0.02)
-    field.type_keys(bill_no, pause=0.02)
-    time.sleep(0.10)
-    field.type_keys("{ENTER}", pause=0.02)
-
-    status, detail = verify_loaded(win)
-    if status == "loaded":
-        print(f"[info] Bill {bill_no} is loaded. {detail}")
-        return True
-    if status == "adding":
-        print(f"[error] Form is still on a NEW bill. {detail}")
-        print("        Saving now would create a DUPLICATE -- stopping.")
-        return False
-
-    print(f"[warn] Could not read the badge to confirm. {detail}")
-    print("[warn] Carrying on anyway -- watch the screen; Ctrl+C to abort.")
-    return True
-
-
-def start_new_bill(win, account_code, ctrls=None):
-    fill_sale_ac(win, ctrls)
-    auto = (ctrls or {}).get("auto", {})
-
-    invoice_field = auto.get(INVOICE_NO_FIELD_AUTO_ID) or find_control_by_auto_id(
-        win, INVOICE_NO_FIELD_AUTO_ID
-    )
-    if invoice_field:
-        print("[info] Triggering Invoice No auto-numbering...")
-        invoice_field.click_input()
-        time.sleep(0.10)
-        invoice_field.type_keys("{ENTER}", pause=0.02)
-        time.sleep(0.25)
-
-    party_field = auto.get(PARTY_FIELD_AUTO_ID) or find_control_by_auto_id(
-        win, PARTY_FIELD_AUTO_ID
-    )
-    if not party_field:
-        print("[error] Could not find Party field. Stopping.")
-        return False
-    print(f"[info] Filling Party = '{account_code}'...")
-    party_field.click_input()
-    party_field.type_keys("^a", pause=0.02)
-    party_field.type_keys(account_code, pause=0.02)
-    party_field.type_keys("{TAB}", pause=0.02)
-    time.sleep(0.30)
-    return True
-
-
-# --------------------------------------------------------------------
-# The item grid and the Pending Order popup
-# --------------------------------------------------------------------
-
-def header_band(rect):
-    """Screen box of the item-grid column-header strip."""
-    h = rect.bottom - rect.top
-    return (rect.left,
-            rect.top + int(h * 0.115),
-            rect.right,
-            rect.top + int(h * 0.160))
-
-
-def grid_anchor(win, ctrls=None):
-    """Where to click so the cursor is really inside the item grid.
-
-    Returns (x, y) in SCREEN coordinates, or None.
-
-    Three sources, best first:
-      1. the MSFlexGrid control's own rectangle, read fresh (not the
-         stale one cached at scan time),
-      2. the OCR'd column headers -- the first data row sits just under
-         them, and the 'Item'/'Code' column is the left edge of the
-         header strip,
-      3. a proportional fallback, only if both of the above fail.
-
-    The old code went straight to (3) and that is why F1 often did
-    nothing: 23% of the window height is the header row on this form,
-    not the first data row."""
-    # 1 -- live control rectangle
-    grid = (ctrls or {}).get("grid")
-    if grid is not None:
-        try:
-            g = grid.rectangle()
-            gw = g.right - g.left
-            gh = g.bottom - g.top
-            if gw > 80 and gh > 40:
-                # a little in from the left, one-and-a-bit rows below
-                # the grid's own header row
-                return (g.left + int(gw * 0.18),
-                        g.top + min(int(gh * 0.22), 60))
-        except Exception:
-            pass
-
-    # 2 -- OCR the column headers, click just below them
-    try:
-        rect = safe_rectangle(win)
-        hb = header_band(rect)
-        data = ocr_tokens(hb, scale=3)
-        xs = []
-        for i, raw in enumerate(data["text"]):
-            label = raw.strip().strip("|}").strip()
-            if label in ("Item", "Code", "Description", "Quantity", "Rate"):
-                xs.append(hb[0] + data["left"][i] // 3)
-        if xs:
-            # Measure DOWN from the bottom of the header strip, not from
-            # the bottom of the header TEXT. The text sits a few pixels
-            # up inside its row, so anchoring on it lands back on the
-            # header itself -- which is exactly why the retry click was
-            # missing the grid.
-            header_bottom = hb[3]
-            left_col = min(xs)
-            row_h = max(14, (rect.bottom - rect.top) // 40)
-            return (left_col + 25, header_bottom + int(row_h * 2.0))
-    except Exception:
-        pass
-
-    # 3 -- proportional fallback
-    try:
-        rect = safe_rectangle(win)
-        w = rect.right - rect.left
-        h = rect.bottom - rect.top
-        return (rect.left + int(w * 0.27), rect.top + int(h * 0.185))
-    except Exception:
-        return None
-
-
-def focus_item_grid(win, ctrls=None):
-    """Clicks the first data row of the item grid. Returns True/False."""
-    pt = grid_anchor(win, ctrls)
-    if pt is None:
-        return False
-    try:
-        rect = safe_rectangle(win)
-        win.click_input(coords=(pt[0] - rect.left, pt[1] - rect.top))
-        return True
-    except Exception:
-        # click_input with screen coords as a last resort
-        try:
-            from pywinauto import mouse
-            mouse.click(coords=pt)
-            return True
-        except Exception:
-            return False
-
-
-def popup_select_button(win, max_depth=4):
-    """The Pending Order popup's 'Select' button. Its presence is the
-    proof that the popup is actually open -- the old code never checked,
-    so a failed F1 looked exactly like a slow one."""
-    btn = find_control_by_text(win, "Select", max_depth=max_depth)
-    if btn:
-        return btn
-    # The popup is sometimes a top-level window of its own.
-    for title in ("Pending Order", "Pending Orders", "Order Selection"):
-        pw = fast_find_window(title=title)
-        if pw:
-            b = find_control_by_text(pw, "Select", max_depth=3)
-            if b:
-                return b
-    return None
-
-
-def open_pending_popup(win, ctrls=None, tries=3):
-    """Places the cursor in the grid and presses F1 until the Pending
-    Order popup is confirmed open. Returns the Select button or None."""
-    for attempt in range(1, tries + 1):
-        safe_focus(win)
-        placed = focus_item_grid(win, ctrls)
-        if not placed:
-            print("[warn] Could not place the cursor in the item grid.")
-        time.sleep(0.10)
-
-        print(f"[info] Pressing F1 (Pending Order popup)"
-              f"{'' if attempt == 1 else f' -- try {attempt}'}...")
-        send_keys("{F1}")
-
-        # Poll for the popup instead of a fixed sleep: it is usually up
-        # in ~0.2s, and waiting a flat second cost that every run.
-        deadline = time.time() + 1.6
-        while time.time() < deadline:
-            btn = popup_select_button(win)
-            if btn:
-                print("[info] Pending Order popup is open.")
-                return btn
-            time.sleep(0.10)
-
-        print("[warn] The popup did not open -- re-placing the cursor.")
-        # A stale cached grid is the usual cause; drop it and re-derive
-        # the anchor from the screen next time round.
-        if ctrls is not None:
-            ctrls["grid"] = None
-    return None
-
-
-def _header_from_ocr(data, box, scale):
-    """Picks the popup's header line out of an OCR pass and returns the
-    column positions on it, or None if that line is not in there."""
-    lines = {}
-    for i, raw in enumerate(data["text"]):
-        t = raw.strip()
-        if not t:
-            continue
-        key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
-        lines.setdefault(key, []).append({
-            "t": t.upper().strip(".|:"),
-            "x0": box[0] + data["left"][i] // scale,
-            "x1": box[0] + (data["left"][i] + data["width"][i]) // scale,
-            "y1": box[1] + (data["top"][i] + data["height"][i]) // scale,
-        })
-
-    for toks in lines.values():
-        words = {d["t"] for d in toks}
-        # The header is the only line carrying CODE together with the
-        # stock/pending headings.
-        if "CODE" not in words or not ({"STOCK", "PEND"} & words):
-            continue
-        cols = {}
-        ord_xs = []
-        for d in toks:
-            if d["t"] == "ORD":
-                ord_xs.append(d["x0"])
-            elif d["t"] == "CODE":
-                cols["code"] = (d["x0"], d["x1"])
-            elif d["t"] == "STOCK":
-                cols["stock"] = (d["x0"], d["x1"])
-            elif d["t"] == "PEND":
-                cols["pend"] = (d["x0"], d["x1"])
-        if "code" not in cols or "pend" not in cols:
-            continue
-        # Three 'ORD's are on that header: the left order list, the right
-        # item list, and the 'ORD.' of 'PEND ORD.'. Only the first two are
-        # left of ITEM CODE; the item list is the second of those.
-        ord_xs = sorted(x for x in ord_xs if x < cols["code"][0])
-        if len(ord_xs) >= 2:
-            cols["checkbox_x"] = ord_xs[1] - 9
-        cols["header_bottom"] = max(d["y1"] for d in toks)
-        cols["header_words"] = sorted(words)
-        return cols
-    return None
-
-
-def popup_columns(win, rect=None):
-    """Finds the Pending Order popup's header row and reads its column
-    positions off it.
-
-    The header reads:
-        ORD No. | ORD No.  DATE  ITEM CODE  ITEM  IN STOCK  PEND ORD.  RATE
-
-    It is SEARCHED FOR rather than assumed to be at a fixed percentage
-    of the window: a band that was right on one screen missed it
-    completely on the real one, and a missed header meant nothing got
-    unticked. Two passes -- a small sharp one where it usually is, then
-    a wide coarse one over most of the lower half.
-
-    Returns {'code','stock','pend': (x0,x1), 'checkbox_x', 'header_bottom'}
-    in screen pixels, or {} if it genuinely is not on screen."""
-    rect = rect or safe_rectangle(win)
-    h = rect.bottom - rect.top
-    attempts = (
-        (0.66, 0.82, 3),     # where it sits on a normal-sized form
-        (0.50, 0.95, 2),     # almost the whole lower half, coarser
-    )
-    for top_f, bot_f, scale in attempts:
-        box = (rect.left,
-               rect.top + int(h * top_f),
-               rect.right,
-               rect.top + int(h * bot_f))
-        try:
-            data = ocr_tokens(box, scale=scale)
-        except Exception:
-            continue
-        cols = _header_from_ocr(data, box, scale)
-        if cols:
-            return cols
-    return {}
-
-
-def popup_item_rows(win, rect=None, cols=None):
-    """Every line of the popup's item list, as
-    [{'y', 'code', 'stock'}, ...] in screen coordinates.
-
-    The crop runs from the ITEM CODE column to just before PEND ORD., so
-    each OCR line is:  CODE  <description words...>  <stock>
-    -- first token is the item code, last token is IN STOCK."""
-    rect = rect or safe_rectangle(win)
-    cols = cols or popup_columns(win, rect)
-    if "code" not in cols or "pend" not in cols:
-        return []
-
-    h = rect.bottom - rect.top
-    box = (max(rect.left, cols["code"][0] - 30),
-           cols.get("header_bottom", rect.top + int(h * 0.775)) + 3,
-           cols["pend"][0] - 4,
-           rect.bottom - int(h * 0.045))
-    if box[2] - box[0] < 60 or box[3] - box[1] < 20:
-        return []
-
-    data = ocr_tokens(box, scale=3)
-    lines = {}
-    for i, raw in enumerate(data["text"]):
-        t = raw.strip()
-        if not t:
-            continue
-        key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
-        lines.setdefault(key, []).append({
-            "text": t,
-            "x": box[0] + data["left"][i] // 3,
-            "y": box[1] + (data["top"][i] + data["height"][i] // 2) // 3,
-        })
-
-    rows = []
-    for toks in lines.values():
-        toks.sort(key=lambda d: d["x"])
-        if len(toks) < 2:
-            continue
-        rows.append({"y": toks[0]["y"],
-                     "code": toks[0]["text"],
-                     "stock": toks[-1]["text"]})
-    rows.sort(key=lambda r: r["y"])
-    return rows
-
-
-def scroll_item_list(win, rect, cols, notches):
-    """Wheel-scrolls the popup's item list. Positive = up, negative =
-    down. The wheel is used rather than a click because clicking a row
-    would select (or worse, tick) it."""
-    if mouse is None:
-        return False
-    x = (cols["code"][0] + cols["pend"][0]) // 2
-    y = (cols.get("header_bottom", rect.top) + rect.bottom) // 2
-    try:
-        mouse.scroll(coords=(x, y), wheel_dist=notches)
-        return True
-    except Exception:
-        return False
-
-
-def untick_items_in_popup(win, codes):
-    """Unticks the popup's item lines whose ITEM CODE is in `codes`, so
-    those items never go onto the bill at all.
-
-    This is done in the popup rather than by deleting a row afterwards:
-    an unticked line stays a PENDING ORDER in Value-FAS, so the item is
-    still waiting to be billed once stock comes in -- which is what you
-    want for something that is out of stock.
-
-    THE LIST SCROLLS. Only about nine lines are visible at a time and an
-    order can easily have sixteen, so the whole list is walked with the
-    mouse wheel: scroll to the top, read, untick what matches, scroll
-    down a bit less than a page (so nothing falls between pages), repeat
-    until every wanted code is found or the list stops producing new
-    lines.
-
-    Returns (removed_codes, missed_codes). A missed code is NOT fatal --
-    Value-FAS may simply not list an out-of-stock item in the popup at
-    all, in which case it was never going onto the bill. The caller
-    settles it by reading the item grid after Select."""
-    want = {str(c).strip().upper() for c in codes}
-    if not want:
-        return [], []
-
-    rect = safe_rectangle(win)
-    cols = popup_columns(win, rect)
-    checkbox_x = cols.get("checkbox_x")
-    if checkbox_x is None or "code" not in cols or "pend" not in cols:
-        print("[warn] Could not read the popup's header row -- nothing unticked.")
-        print(f"[warn] What the header pass did read: "
-              f"{cols.get('header_words', '(nothing)')}")
-        shot = save_debug_shot(win, "popup_header")
-        if shot:
-            print(f"[warn] Saved a picture of the screen to {shot} -- send it "
-                  f"to Claude.")
-        return [], sorted(want)
-
-    # Start from the top of the list wherever it happens to be sitting.
-    for _ in range(8):
-        if not scroll_item_list(win, rect, cols, 3):
-            break
-        time.sleep(0.03)
-    time.sleep(0.12)
-
-    removed, seen = set(), set()
-    pages_without_new = 0
-
-    for _ in range(25):
-        rows = popup_item_rows(win, rect, cols)
-        fresh = False
-        for r in rows:
-            code = r["code"].strip().upper()
-            if code and code not in seen:
-                seen.add(code)
-                fresh = True
-            if code in want and code not in removed:
-                print(f"[info] Stock 0 -- unticking item {r['code']} "
-                      f"(popup shows IN STOCK = {r['stock']}).")
-                try:
-                    win.click_input(coords=(checkbox_x - rect.left,
-                                            r["y"] - rect.top))
-                    removed.add(code)
-                    time.sleep(0.12)
-                except Exception as e:
-                    print(f"[warn] Could not untick {r['code']}: {e}")
-
-        if want <= removed:
-            break
-        pages_without_new = 0 if fresh else pages_without_new + 1
-        if pages_without_new >= 2:
-            break
-        # A bit less than one screenful, so no line is skipped between
-        # pages.
-        if not scroll_item_list(win, rect, cols, -2):
-            print("[warn] Could not scroll the popup's item list.")
-            break
-        time.sleep(0.14)
-
-    missed = sorted(want - removed)
-    if missed:
-        print(f"[warn] These 0-stock item(s) were not found in the popup: "
-              f"{', '.join(missed)}")
-        print(f"[warn] Item codes the popup did show ({len(seen)}): "
-              f"{', '.join(sorted(seen)) if seen else '(none read)'}")
-        print("[warn] Carrying on -- the item grid is checked after Select, "
-              "and nothing is saved if one of them is on the bill.")
-    return sorted(removed), missed
-
-
-def grid_geometry(win):
-    """Returns (rect, columns) where columns maps 'Quantity'/'Rate' to
-    the screen x to click for that column.
-
-    The header labels sit directly above their columns, so their centre
-    is a safe click x. Hard-coded percentages were landing on the wrong
-    columns entirely -- 76% of the window width is D(%), not Rate."""
-    rect = safe_rectangle(win)
-    hb = header_band(rect)
-    data = ocr_tokens(hb, scale=3)
-
-    columns = {}
-    for i, raw in enumerate(data["text"]):
-        label = raw.strip().strip("|}").strip()
-        if label in ("Quantity", "Rate"):
-            x0 = hb[0] + data["left"][i] // 3
-            x1 = x0 + data["width"][i] // 3
-            columns[label] = (x0 + x1) // 2
-    return rect, columns
-
-
-def find_item_row(rect, code):
-    """Screen y of the row whose Code cell is `code`, or None."""
-    h = rect.bottom - rect.top
-    w = rect.right - rect.left
-    # Code column only -- a narrow crop keeps OCR quick and stops a
-    # number inside the Item description from matching.
-    left = rect.left + int(w * 0.035)
-    right = rect.left + int(w * 0.215)  # 0.16 clipped codes like UMC-003A
-    top = rect.top + int(h * 0.145)
-    bottom = rect.top + int(h * 0.72)
-
-    data = ocr_tokens((left, top, right, bottom), scale=4)
-    for i, raw in enumerate(data["text"]):
-        if raw.strip() == code:
-            return top + (data["top"][i] + data["height"][i] // 2) // 4
-    return None
-
-
-def read_row_values(rect, row_y):
-    """OCRs one grid row so a change can be confirmed."""
-    band = 9
-    data = ocr_tokens((rect.left, row_y - band, rect.right, row_y + band), scale=3)
-    return " ".join(t.strip() for t in data["text"] if t.strip())
-
-
-def set_cell(win, rect, row_y, col_x, value):
-    win.click_input(coords=(col_x - rect.left, row_y - rect.top))
-    time.sleep(0.15)
-    # Replace the cell's contents rather than appending to them.
-    win.type_keys("{HOME}+{END}", pause=0.03)
-    win.type_keys(str(value), pause=0.03)
-    win.type_keys("{ENTER}", pause=0.03)
-    time.sleep(0.28)
-
-
-def apply_grid_edits(win, edits):
-    """edits: list of (column, code, value). Returns True only if every
-    edit was made AND the row visibly changed afterwards -- the caller
-    must not save unless this returns True."""
-    rect, columns = grid_geometry(win)
-    needed = {col for col, _, _ in edits}
-    for col in sorted(needed):
-        if col not in columns:
-            print(f"[error] Could not read the '{col}' column header off the screen.")
-            return False
-    print("[info] Columns at x: " + ", ".join(f"{k}={v}" for k, v in sorted(columns.items())))
-
-    ok = True
-    for col, code, value in edits:
-        row_y = find_item_row(rect, code)
-        if row_y is None:
-            print(f"[error] Item '{code}' is not in this bill.")
-            ok = False
-            continue
-        before = read_row_values(rect, row_y)
-        set_cell(win, rect, row_y, columns[col], value)
-        after = read_row_values(rect, row_y)
-        print(f"[info] {code} {col}={value}")
-        print(f"         before: {before}")
-        print(f"         after : {after}")
-        if before == after:
-            print(f"[error] {code}: the row did not change -- edit did not take.")
-            ok = False
-    return ok
-
-
-def parse_pairs(values, flag):
-    """--qty 2215=10 --qty 9202=3  ->  [('2215','10'), ('9202','3')]"""
-    pairs = []
-    for item in values or []:
-        if "=" not in item:
-            print(f"[error] {flag} needs CODE=VALUE, got '{item}'")
-            sys.exit(1)
-        code, val = item.split("=", 1)
-        code, val = code.strip(), val.strip()
-        if not code or not val:
-            print(f"[error] {flag} needs CODE=VALUE, got '{item}'")
-            sys.exit(1)
-        pairs.append((code, val))
-    return pairs
-
-
-
-
-# ====================================================================
-# Making one bill
-# ====================================================================
-
-def pick_pending_order(win, target_order, ctrls=None, drop_codes=None):
-    """F1 -> find the order on screen -> tick it -> take the
-    out-of-stock lines off -> Select."""
-    select_btn = open_pending_popup(win, ctrls)
-    if not select_btn:
-        log("[error] The Pending Order popup never opened (F1 did nothing).")
-        shot = save_debug_shot(win, "f1_failed")
-        if shot:
-            log(f"[error] Picture of the screen saved: {shot}")
-        return False
-
-    win_rect = safe_rectangle(win)
-    win_w = win_rect.right - win_rect.left
-    win_h = win_rect.bottom - win_rect.top
-    left = win_rect.left
-    top = win_rect.top + int(win_h * 0.70)
-    right = win_rect.left + int(win_w * 0.13)
-    bottom = win_rect.bottom - int(win_h * 0.04)
-
-    match_y = match_x_left = None
-    for attempt in range(14):
-        data = ocr_tokens((left, top, right, bottom), scale=4)
-        for i, text in enumerate(data["text"]):
-            if text.strip() == str(target_order):
-                match_y = top + (data["top"][i] + data["height"][i] // 2) // 4
-                match_x_left = left + data["left"][i] // 4
-                break
-        if match_y is not None:
-            log(f"[info] Order {target_order} found in the popup (pass {attempt+1}).")
-            break
-        if attempt >= 1:
-            for _ in range(5):
-                send_keys("{DOWN}")
-                time.sleep(0.03)
-        time.sleep(0.10)
-
-    if match_y is None:
-        log(f"[error] Order {target_order} is not in the Pending Order popup.")
-        shot = save_debug_shot(win, f"order_{target_order}_not_found")
-        if shot:
-            log(f"[error] Picture of the screen saved: {shot}")
-        return False
-
-    checkbox_x = match_x_left - 9
-    r2 = safe_rectangle(win)
-    win.click_input(coords=(checkbox_x - r2.left, match_y - r2.top))
-    time.sleep(0.18)
-
-    if drop_codes:
-        removed, missed = untick_items_in_popup(win, drop_codes)
-        log(f"[info] {len(removed)} out-of-stock line(s) taken off"
-            + (f"; {len(missed)} not found in the popup." if missed else "."))
-        time.sleep(0.15)
-
-    btn = popup_select_button(win) or select_btn
-    try:
-        btn.click_input()
-    except Exception:
-        btn = popup_select_button(win)
-        if not btn:
-            log("[error] Lost the 'Select' button.")
-            return False
-        btn.click_input()
-    time.sleep(0.30)
-    return True
-
-
-def open_sale_entry():
-    """The Sale Entry window, opening it if it is not already up."""
-    win = find_window_by_exact_title("Sale Entry")
-    if win:
-        return win
-    main_win = find_main_fas_window()
-    if not main_win:
-        log("[error] Value-FAS (ESTIMATE) window not found. Is it open?")
-        return None
-    safe_focus(main_win)
-    rect = safe_rectangle(main_win)
-    w = rect.right - rect.left
-    h = rect.bottom - rect.top
-    log("[info] Opening Sale Entry...")
-    main_win.click_input(coords=(rect.left + int(w * 0.059),
-                                 rect.top + int(h * 0.068)))
-    for _ in range(30):
-        time.sleep(0.10)
-        win = fast_find_window(title="Sale Entry")
-        if win:
-            return win
-    return find_window_by_exact_title("Sale Entry")
-
-
-def make_one_bill(account_code, order_no, allow_zero_stock=False,
-                  dry_run=False, edits=None):
-    """Put ONE order onto the party's bill. Returns (ok, reason).
-
-    ok is True only when the database confirms the order's lines are on
-    a bill afterwards. Nothing here trusts a keystroke."""
-    order_no = str(order_no).strip()
-    started = time.time()
-
-    # ---- already done? --------------------------------------------
-    before = order_is_billed(order_no)
-    items, zero = order_stock(order_no)
-    if items and before and all(i["code"] in before for i in items):
-        return True, "was already on a bill"
-
-    existing = todays_bill_for_party(account_code)
-    if existing:
-        log(f"[info] {account_code} already has bill B={existing} today -- "
-            f"adding order {order_no} to it.")
-    else:
-        log(f"[info] {account_code} has no bill today -- starting a new one.")
-
-    drop_codes = []
-    if zero and not allow_zero_stock:
-        drop_codes = [z["code"] for z in zero]
-        if items and len(zero) == len(items):
-            log(f"[warn] Every item on order {order_no} reads stock 0 -- that "
-                f"is a bad read, not an empty shop. Skipping the check.")
-            drop_codes = []
-        else:
-            log(f"[info] {len(zero)} of {len(items)} item(s) have 0 stock -- "
-                f"they will be left OFF the bill:")
-            for z in zero:
-                log(f"        {z['code']:<12} {z['name'][:32]:<34} "
-                    f"stock={z['stock']:g} ordered={z['qty']}")
-
-    win = open_sale_entry()
-    if not win:
-        return False, "Sale Entry did not open"
-    safe_focus(win)
-    ctrls = scan_controls(win)
-
-    if existing:
-        if not load_existing_bill(win, existing, ctrls):
-            clear_form(win)
-            return False, f"could not load bill B={existing}"
-    else:
-        if not start_new_bill(win, account_code, ctrls):
-            return False, "could not start a new bill"
-
-    if not pick_pending_order(win, order_no, ctrls, drop_codes=drop_codes):
-        return False, "F1 / Pending Order step failed"
-
-    if drop_codes:
-        grect = safe_rectangle(win)
-        still = [c for c in drop_codes if find_item_row(grect, c) is not None]
-        if still:
-            log(f"[STOP] 0-stock item(s) still on the bill: {', '.join(still)}")
-            log("       NOTHING SAVED. The bill is on screen unsaved.")
-            return False, "out-of-stock item could not be removed"
-
-    if edits and not apply_grid_edits(win, edits):
-        return False, "a qty/rate edit could not be confirmed"
-
-    if dry_run:
-        log(f"[dry-run] Everything done except Save ({time.time()-started:.1f}s).")
-        return True, "dry run -- nothing saved"
-
-    # ---- save, then ASK THE DATABASE ------------------------------
-    log("[info] Saving (Alt+S)...")
-    for attempt in (1, 2):
-        if attempt > 1:
-            log("[info] Database says not saved yet -- pressing Alt+S again...")
-        safe_focus(win)
-        send_keys("%s")
-        for d in dismiss_popups(win, label="save dialog"):
-            log(f"[info] Dialog: \"{d['message'][:55]}\" -> {d['button']}")
-        after = order_is_billed(order_no)
-        if after and (not items or any(i["code"] in after for i in items)):
-            break
-        time.sleep(0.6)
-
-    after = order_is_billed(order_no)
-    took = time.time() - started
-    if not after:
-        return False, f"database shows no bill line for this order ({took:.1f}s)"
-    if items:
-        want = {i["code"] for i in items} - set(drop_codes)
-        missing = want - after
-        if missing:
-            return True, (f"saved, but {len(missing)} line(s) are not on a bill "
-                          f"yet: {', '.join(sorted(missing)[:6])} ({took:.1f}s)")
-    return True, f"confirmed in the database ({took:.1f}s)"
-
-
-# ====================================================================
-# The queue
-# ====================================================================
-
-def process_queue(allow_zero_stock=False):
-    """Work through EVERY queued order, not one per cycle.
-
-    Tapping 'Make Bills' on ten orders has to produce ten bills. One
-    order failing must not stop the other nine."""
-    queue = queued_orders()
-    if not queue:
-        return 0, 0
-
-    log("")
-    log(f"[queue] {len(queue)} order(s) to bill: "
-        f"{', '.join(str(r['order_no']) for r in queue)}")
-    billed_map = billed_item_codes()
-    ok_list, fail_list = [], []
-
-    for n, row in enumerate(queue, 1):
-        order_no = str(row.get("order_no"))
-        ac = str(row.get("ac_code")).strip()
-        log("")
-        log(f"[{n}/{len(queue)}] Order {order_no} -- {row.get('party') or ac}")
-
-        taken = billed_map.get(_order_key(order_no), set())
-        items = row.get("items") or []
-        if items and taken and all(
-                str(it.get("code") or "").strip() in taken for it in items):
-            mark_done(row, "already on a bill")
-            ok_list.append(order_no)
-            continue
-
-        try:
-            ok, why = make_one_bill(ac, order_no,
-                                    allow_zero_stock=allow_zero_stock)
-        except KeyboardInterrupt:
-            raise
-        except Exception as e:
-            ok, why = False, f"unexpected error: {e}"
-
-        if ok:
-            mark_done(row, why)
-            ok_list.append(order_no)
-        else:
-            log(f"[FAIL] Order {order_no}: {why}")
-            mark_back_to_pending(row, why)
-            fail_list.append(f"{order_no} ({why})")
-        billed_map = billed_item_codes()
-
-    log("")
-    log(f"[queue] Done. {len(ok_list)} made"
-        + (f": {', '.join(ok_list)}" if ok_list else "")
-        + (f" | {len(fail_list)} failed: {'; '.join(fail_list)}" if fail_list else ""))
-    return len(ok_list), len(fail_list)
-
-
-def show_status():
-    billed_map = billed_item_codes()
-    log(f"[status] Sale bills reference {len(billed_map)} order(s) in the "
-        f"last {BILLED_LOOKBACK_DAYS} days.")
-    try:
-        pend = sb_get("status=eq.pending&select=order_no")
-        queue = queued_orders()
-        done = sb_get("status=eq.billed&fas_entry_started=eq.true&select=order_no")
-    except Exception as e:
-        log(f"[warn] Could not read the website: {e}")
-        return
-    log(f"[status] website: {len(pend)} pending, {len(queue)} queued to bill, "
-        f"{len(done)} done.")
-    if queue:
-        log(f"[status] queued: {', '.join(str(r['order_no']) for r in queue)}")
-
-
-# ====================================================================
-# Main
-# ====================================================================
-
-def main():
-    ap = argparse.ArgumentParser(
-        description="Make bills in Value-FAS from the OrderFlow website.")
-    ap.add_argument("account_code", nargs="?", help="Party code, e.g. W-01-S")
-    ap.add_argument("order_no", nargs="?", help="Order number, e.g. 9956")
-    ap.add_argument("--once", action="store_true",
-                    help="Do what is queued now, then stop.")
-    ap.add_argument("--check", action="store_true",
-                    help="ONLY read the database and fix green marks.")
-    ap.add_argument("--status", action="store_true", help="Show what is queued.")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="Everything except the final Save.")
-    ap.add_argument("--allow-zero-stock", action="store_true",
-                    help="Bill 0-stock items too.")
-    ap.add_argument("--qty", action="append", metavar="CODE=VALUE")
-    ap.add_argument("--rate", action="append", metavar="CODE=VALUE")
-    args = ap.parse_args()
-
-    if args.status:
-        show_status()
-        return
-
-    if args.check:
-        log("[check] Reading Value-FAS and fixing the green marks...")
-        full, partial = refresh_from_value_fas()
-        if not full and not partial:
-            log("[check] Nothing to change -- the website already matches "
-                "Value-FAS.")
-        return
-
-    if args.account_code and args.order_no:
-        edits = [("Quantity", c, v) for c, v in parse_pairs(args.qty, "--qty")]
-        edits += [("Rate", c, v) for c, v in parse_pairs(args.rate, "--rate")]
-        ok, why = make_one_bill(args.account_code, args.order_no,
-                                allow_zero_stock=args.allow_zero_stock,
-                                dry_run=args.dry_run, edits=edits)
-        log("")
-        log(f"[done] Order {args.order_no}: {'OK' if ok else 'FAILED'} -- {why}")
-        if ok and not args.dry_run:
-            refresh_from_value_fas()
-        sys.exit(0 if ok else 1)
-
-    if args.account_code or args.order_no:
-        log("[error] Give BOTH the party code and the order number, "
-            "e.g.  python bill_maker.py W-01-S 9956")
-        sys.exit(1)
-
-    # ---- watch mode ------------------------------------------------
-    log("")
-    log("=" * 60)
-    log("[bill_maker] Watching the website. Ctrl+C to stop.")
-    log(f"[bill_maker] Checking every {CHECK_EVERY_SECONDS}s. "
-        f"Stock = {STOCK_EXPR_HUMAN}.")
-    log("=" * 60)
-    while True:
-        try:
-            billed_map = billed_item_codes()
-            refresh_from_value_fas(billed_map)
-            process_queue(allow_zero_stock=args.allow_zero_stock)
-            if args.once:
-                return
-        except KeyboardInterrupt:
-            log("[bill_maker] Stopped.")
-            return
-        except Exception as e:
-            log(f"[bill_maker] Error this cycle, carrying on: {e}")
-        time.sleep(CHECK_EVERY_SECONDS)
-
-
-if __name__ == "__main__":
-    main()
+  ];
+  DB.save(orders);
+  return orders;
+}
+
+let orders = DB.load();
+let currentOrderId = null;
+let activeTab = 'orders';
+let currentRole = localStorage.getItem('orderflow_role') || null; // 'ceo' | 'dispatcher' | 'picker'
+if(currentRole && !['ceo','dispatcher','picker'].includes(currentRole)){
+  // Stale value from an older version of the app (e.g. old PIN system's
+  // 'full') -- force a clean re-login instead of misreading it.
+  currentRole = null;
+  localStorage.removeItem('orderflow_role');
+}
+let currentPhone = localStorage.getItem('orderflow_phone') || null;
+let currentName = localStorage.getItem('orderflow_name') || '';
+
+const main = document.getElementById('main');
+const tabbar = document.querySelector('nav.tabbar');
+const modalRoot = document.getElementById('modalRoot');
+
+function fmt(n){
+  if(n===null || n===undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function statusLabel(s){
+  return {pending:'Pending Check', checking:'In Packing', ready:'Ready to Bill', billed:'Billed'}[s] || s;
+}
+function statusPillClass(s){
+  return {pending:'pending', checking:'checking', ready:'ready', billed:'billed'}[s] || 'pending';
+}
+
+/* -------- routing -------- */
+tabbar.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-tab]');
+  if(!btn) return;
+  activeTab = btn.dataset.tab;
+  currentOrderId = null;
+  [...tabbar.children].forEach(b=>b.classList.toggle('active', b===btn));
+  render();
+});
+
+function goToOrder(id){
+  currentOrderId = id;
+  pickerIdx = 0;
+  render();
+}
+
+function render(){
+  if(!currentRole){
+    renderPhoneLogin();
+    return;
+  }
+  if(currentOrderId){
+    renderOrderDetail(currentOrderId);
+  } else if(activeTab === 'users'){
+    renderManageUsers();
+  } else {
+    renderOrderList();
+  }
+}
+
+function renderPhoneLogin(){
+  document.getElementById('headerContent').innerHTML = `
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div>
+        <div class="brand-name">OrderFlow</div>
+        <div class="brand-sub">Shree Giriraj Auto Parts</div>
+      </div>
+    </div>`;
+  main.innerHTML = `
+    <div class="section-label">Tamaro mobile number nakho</div>
+    <div class="field" style="max-width:320px;">
+      <input id="login-phone" inputmode="numeric" placeholder="98765 43210" oninput="prefillName()" style="font-size:18px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-panel);">
+    </div>
+    <button class="btn btn-primary" style="max-width:320px;" onclick="doPhoneLogin()">Login</button>
+    <div class="fab-note" id="name-hint">Naam CEO nakhe che (Manage Users thi).</div>
+    <div class="fab-note">Nava number ne CEO j role assign kari shake che (Manage Users thi).</div>
+  `;
+}
+
+let _prefillFor = '';
+async function prefillName(){
+  // As soon as a full number is typed, pull the name the CEO saved for it
+  // so nobody has to type their own name every time.
+  const phone = (document.getElementById('login-phone').value || '').replace(/\D/g, '');
+  const hint = document.getElementById('name-hint');
+  if(!hint) return;
+  if(phone.length < 10){
+    _prefillFor = '';
+    hint.textContent = 'Naam CEO nakhe che (Manage Users thi).';
+    hint.style.color = '';
+    return;
+  }
+  if(phone === _prefillFor) return;
+  _prefillFor = phone;
+  const u = await getUser(phone);
+  if((document.getElementById('login-phone').value || '').replace(/\D/g,'') !== phone) return;
+  const saved = (u && u.name ? String(u.name) : '').trim();
+  if(saved){
+    hint.textContent = '\u2713 ' + saved;
+    hint.style.color = 'var(--ok)';
+  }else if(u){
+    hint.textContent = 'Aa number mate naam save nathi -- CEO ne kaho.';
+    hint.style.color = 'var(--bad)';
+  }else{
+    hint.textContent = 'Aa number register nathi thayu -- CEO ne kaho.';
+    hint.style.color = 'var(--bad)';
+  }
+}
+
+async function doPhoneLogin(){
+  const raw = document.getElementById('login-phone').value.trim();
+  const phone = raw.replace(/\D/g, '');
+  if(phone.length < 10){ alert('Sahi 10-digit mobile number nakho'); return; }
+
+  // Nobody types their own name any more. The CEO puts it against the
+  // number in Manage Users, and it is simply read back here.
+  const existing = await getUser(phone);
+  const savedName = (existing && existing.name ? String(existing.name) : '').trim();
+
+  if(existing){
+    if(!savedName){
+      alert('Aa number mate naam save nathi thayu.\n\nCEO ne kaho: Manage Users '
+            + 'ma ' + phone + ' ni same naam nakhe.');
+      return;
+    }
+    currentRole = existing.role;
+    currentPhone = phone;
+    currentName = savedName;
+  } else {
+    const noUsersYet = !(await anyUsersExist());
+    if(noUsersYet){
+      // Bootstrap: the very first person in becomes CEO. There is no CEO
+      // yet to name them, so the number stands in until they set their
+      // own name in Manage Users.
+      await setUser(phone, 'ceo', phone);
+      currentRole = 'ceo';
+      currentPhone = phone;
+      currentName = phone;
+    } else {
+      alert('Aa number register nathi thayu. CEO ne kaho tamne "Manage Users" thi umerva mate.');
+      return;
+    }
+  }
+  localStorage.setItem('orderflow_role', currentRole);
+  localStorage.setItem('orderflow_phone', currentPhone);
+  localStorage.setItem('orderflow_name', currentName);
+  render();
+}
+
+function switchRole(){
+  currentRole = null;
+  currentPhone = null;
+  localStorage.removeItem('orderflow_role');
+  localStorage.removeItem('orderflow_phone');
+  currentOrderId = null;
+  activeTab = 'orders';
+  render();
+}
+
+/* -------- CEO: Manage Users -------- */
+async function renderManageUsers(){
+  document.getElementById('headerContent').innerHTML = `
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div style="flex:1;">
+        <div class="brand-name">Manage Users</div>
+        <div class="brand-sub">CEO j role assign kari shake che</div>
+      </div>
+      <span class="role-badge" onclick="switchRole()">LOGOUT ⇄</span>
+    </div>`;
+  main.innerHTML = `<div class="empty">Loading...</div>`;
+  const users = await listUsers();
+  const rows = users.map(u => `
+    <div class="order-card" style="cursor:default; align-items:flex-start;">
+      <div style="flex:1; min-width:0;">
+        <div class="no">${esc(u.phone)}</div>
+        <input class="user-name-input" value="${esc(u.name || '')}"
+               placeholder="Naam nakho (dakhla tarike Ramesh Bhai)"
+               onchange="saveUserName('${esc(u.phone)}', this.value, this)">
+        <div class="fab-note" id="saved-${esc(u.phone)}" style="text-align:left; margin:4px 0 0; min-height:14px;"></div>
+      </div>
+      <div class="right">
+        <select onchange="changeUserRole('${esc(u.phone)}', this.value)" style="padding:6px 8px; border-radius:8px; border:1px solid var(--line);">
+          <option value="ceo" ${u.role==='ceo'?'selected':''}>CEO</option>
+          <option value="dispatcher" ${u.role==='dispatcher'?'selected':''}>Dispatcher</option>
+          <option value="picker" ${u.role==='picker'?'selected':''}>Picker</option>
+        </select>
+      </div>
+    </div>`).join('');
+  main.innerHTML = `
+    <div class="section-label">Registered numbers</div>
+    ${rows || '<div class="empty">Koi user nathi</div>'}
+    <div class="section-label">Navo number umero</div>
+    <div class="field"><input id="new-user-phone" placeholder="98765 43210" style="padding:10px; border:1px solid var(--line); border-radius:8px;"></div>
+    <div class="field" style="margin-top:8px;"><input id="new-user-name" placeholder="Naam (dakhla tarike Ramesh Bhai)" style="padding:10px; border:1px solid var(--line); border-radius:8px;"></div>
+    <div class="field" style="margin-top:8px;">
+      <select id="new-user-role" style="padding:10px; border:1px solid var(--line); border-radius:8px;">
+        <option value="dispatcher">Dispatcher</option>
+        <option value="picker">Picker</option>
+        <option value="ceo">CEO</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="addNewUser()">Umero</button>
+  `;
+}
+
+async function changeUserRole(phone, role){
+  // PATCH, not setUser -- setUser rewrote the whole row and blanked the
+  // name every time a role was changed here.
+  await patchUser(phone, {role});
+  renderManageUsers();
+}
+
+async function saveUserName(phone, name, inputEl){
+  const clean = String(name || '').trim();
+  const note = document.getElementById('saved-' + phone);
+  const ok = await patchUser(phone, {name: clean});
+  if(note){
+    note.textContent = ok
+      ? (clean ? '✓ Saved -- aa number thi login karse tyare aa naam apoap aavse.'
+               : '✓ Naam kadhi nakhyu.')
+      : '✗ Save na thayu -- internet check karo.';
+    note.style.color = ok ? 'var(--ok)' : 'var(--bad)';
+  }
+  if(inputEl) inputEl.value = clean;
+}
+
+async function addNewUser(){
+  const raw = document.getElementById('new-user-phone').value.trim();
+  const phone = raw.replace(/\D/g, '');
+  const role = document.getElementById('new-user-role').value;
+  const name = (document.getElementById('new-user-name').value || '').trim();
+  if(phone.length < 10){ alert('Sahi 10-digit number nakho'); return; }
+  if(!name){ alert('Naam pan nakho -- aa number thi login thay tyare e j naam vaprashe.');
+             document.getElementById('new-user-name').focus(); return; }
+  await setUser(phone, role, name);
+  renderManageUsers();
+}
+
+/* -------- Live Stock -------- */
+let stockCache = null;
+
+async function fetchAllStock(){
+  let all = [];
+  let from = 0;
+  const pageSize = 1000;
+  while(true){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/stock?select=*`, {
+      headers: {...SB_HEADERS, 'Range': `${from}-${from + pageSize - 1}`}
+    });
+    const rows = await res.json();
+    if(!Array.isArray(rows) || rows.length === 0) break;
+    all.push(...rows.map(r => ({code: r.code, name: r.name, qty: r.qty, rate: r.rate, minQty: r.min_qty, location: r.location})));
+    if(rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
+async function renderStockView(){
+  document.getElementById('headerContent').innerHTML = `
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div style="flex:1;">
+        <div class="brand-name">Live Stock</div>
+        <div class="brand-sub">Value-FAS thi live — har ${10} minute e update</div>
+      </div>
+      <span class="role-badge" onclick="switchRole()">${currentRole==='picker'?'PICKER':currentRole==='ceo'?'CEO':'DISPATCHER'} ⇄</span>
+    </div>`;
+
+  main.innerHTML = `
+    <div class="field" style="margin-bottom:12px;">
+      <input id="stock-search" placeholder="Code ya naam search karo..." oninput="filterStock()"
+        style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
+    </div>
+    <div id="stock-list"><div class="empty">Loading...</div></div>
+  `;
+
+  if(!stockCache){
+    stockCache = await fetchAllStock();
+  }
+  filterStock();
+}
+
+function filterStock(){
+  const q = (document.getElementById('stock-search')?.value || '').trim().toLowerCase();
+  const list = document.getElementById('stock-list');
+  if(!stockCache){ list.innerHTML = `<div class="empty">Loading...</div>`; return; }
+
+  let items = stockCache;
+  if(q){
+    items = items.filter(it => (it.code||'').toLowerCase().includes(q) || (it.name||'').toLowerCase().includes(q));
+  }
+  items = items.slice(0, 100); // cap render for performance
+
+  if(items.length === 0){
+    list.innerHTML = `<div class="empty">Koi item na malyu.</div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(it => {
+    const low = Number(it.qty) <= Number(it.minQty) && Number(it.minQty) > 0;
+    return `
+      <div class="item-row ${low?'mismatch':''}">
+        <div class="item-top">
+          <div>
+            <div class="item-code">${it.code}</div>
+            <div class="item-desc">${it.name}</div>
+          </div>
+        </div>
+        <div class="item-grid">
+          <div class="field">
+            <label>QTY</label>
+            <div class="readonly" style="font-weight:700; ${low?'color:var(--bad);':''}">${fmt(it.qty)}</div>
+          </div>
+          <div class="field">
+            <label>LOCATION</label>
+            <div class="readonly">${it.location || '—'}</div>
+          </div>
+          <div class="field">
+            <label>RATE</label>
+            <div class="readonly">₹ ${fmt(it.rate)}</div>
+          </div>
+          <div class="field">
+            <label>MIN QTY</label>
+            <div class="readonly">${fmt(it.minQty)}</div>
+          </div>
+        </div>
+        ${low ? `<div class="mismatch-tag">⚠ Stock Min Qty thi ochu che</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+
+/* -------- Orders list -------- */
+function renderOrderList(){
+  document.getElementById('headerContent').innerHTML = `
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div style="flex:1;">
+        <div class="brand-name">OrderFlow</div>
+        <div class="brand-sub">Shree Giriraj Auto Parts — order → pack check → bill</div>
+      </div>
+      <span class="role-badge" onclick="switchRole()">${currentRole==='picker'?'PICKER':currentRole==='ceo'?'CEO':'DISPATCHER'} ⇄</span>
+    </div>`;
+
+  if(currentRole === 'ceo'){
+    tabbar.querySelector('[data-tab="users"]')?.remove();
+    const usersBtn = document.createElement('button');
+    usersBtn.dataset.tab = 'users';
+    usersBtn.innerHTML = '<span class="ico">⚙</span>Manage Users';
+    tabbar.insertBefore(usersBtn, tabbar.lastElementChild.nextSibling);
+  }
+
+  if(orders.length === 0){
+    main.innerHTML = `<div class="empty">Koi order nathi. Value-FAS ma navi order banavta j apoap aavi jashe.</div>`;
+    return;
+  }
+
+  const isCeo = currentRole === 'ceo';
+  const rows = orders.map(o=>{
+    const total = o.items.length;
+    const mismatches = o.items.filter(it => it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)))).length;
+    // How many of this order's items a Sale bill in Value-FAS has already
+    // taken. Put on the card so nobody has to open the order to find out.
+    const billedCount = o.items.filter(it => it.billed).length;
+    const allBilled = billedCount > 0 && billedCount === total;
+    const showCheckbox = isCeo && o.status === 'ready';
+    return `
+      <div class="order-card ${billedCount?'has-billed':''}" data-status="${o.status}" data-search="${(o.orderNo+' '+o.party+' '+(o.location||'')+' '+o.items.map(it=>it.code).join(' ')).toLowerCase()}" onclick="goToOrder('${o.id}')">
+        ${showCheckbox ? `<input type="checkbox" class="batch-bill-check" data-order-id="${o.id}" onclick="event.stopPropagation(); updateBatchBillBar();" style="width:20px; height:20px; flex:none; margin-right:2px;">` : ''}
+        <div>
+          <div class="no">${o.orderNo}${o.location ? ' · '+o.location : ''}${o.date ? ' · '+o.date : ''}</div>
+          <div class="title">${o.party}</div>
+          <div class="meta">${total} item${total>1?'s':''}${(!currentRole || currentRole!=='picker') && mismatches ? ' · '+mismatches+' mismatch'+(mismatches>1?'es':'') : ''}</div>
+          ${billedCount ? `<div class="card-billed">✓ ${allBilled
+              ? 'VALUE-FAS MA BILL BANI GAYU — na kadhso'
+              : billedCount + ' / ' + total + ' item bill ma aavi gaya'}</div>` : ''}
+        </div>
+        <div class="right">
+          <span class="pill ${statusPillClass(o.status)}">${statusLabel(o.status)}</span>
+        </div>
+        <div class="chevron">›</div>
+      </div>`;
+  }).join('');
+
+  // A count on screen, so "only a few showing" is obviously a filter or a
+  // scroll position -- not the list having failed to load.
+  const statusCounts = {pending:0, checking:0, ready:0, billed:0};
+  orders.forEach(o => { if(statusCounts[o.status]!==undefined) statusCounts[o.status]++; });
+  const filterChips = ['all','pending','checking','ready','billed'].map(s => {
+    const label = s==='all' ? `All (${orders.length})` : `${statusLabel(s)} (${statusCounts[s]||0})`;
+    return `<button class="status-chip" data-status-filter="${s}" onclick="setOrderStatusFilter('${s}')">${label}</button>`;
+  }).join('');
+
+  main.innerHTML = `
+    <div class="field" style="margin-bottom:10px;">
+      <input id="order-search" placeholder="Order no, party, location ya item code search karo..." oninput="filterOrderList()"
+        style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
+    </div>
+    <div id="status-chip-row" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px;">${filterChips}</div>
+    ${isCeo ? `<div id="batch-bill-bar" class="hidden" style="display:none; align-items:center; gap:10px; background:var(--accent-dim); border-radius:8px; padding:10px 12px; margin-bottom:12px;">
+      <span id="batch-bill-count" style="font-size:13px; font-weight:600; color:var(--accent);">0 order pasand karya</span>
+      <button class="btn btn-primary" style="margin:0; width:auto; padding:8px 16px;" onclick="generateBatchBills()">Badha na Bill Banavo</button>
+    </div>` : ''}
+    <div class="section-label">Today's orders</div>
+    <div id="order-list-rows">${rows}</div>
+    <div class="fab-note">Order Value-FAS mathi apoap aave che. Yaadi dar 3 second e taji thay che.</div>`;
+  updateStatusChipStyles();
+}
+
+function updateBatchBillBar(){
+  const bar = document.getElementById('batch-bill-bar');
+  if(!bar) return;
+  const checked = document.querySelectorAll('.batch-bill-check:checked').length;
+  bar.style.display = checked > 0 ? 'flex' : 'none';
+  const countEl = document.getElementById('batch-bill-count');
+  if(countEl) countEl.textContent = `${checked} order pasand karya`;
+}
+
+function generateBatchBills(){
+  const ids = [...document.querySelectorAll('.batch-bill-check:checked')].map(c => c.dataset.orderId);
+  if(ids.length === 0) return;
+  if(!confirm(`${ids.length} order na bill ek sathe banavva che?`)) return;
+  ids.forEach(id => {
+    const o = orders.find(x => x.id === id);
+    if(o && o.status === 'ready'){
+      o.status = 'billed';
+      o.billedAt = new Date().toISOString();
+    }
+  });
+  DB.save(orders);
+  render();
+}
+
+let orderStatusFilter = 'all';
+function setOrderStatusFilter(s){
+  orderStatusFilter = s;
+  updateStatusChipStyles();
+  filterOrderList();
+}
+function updateStatusChipStyles(){
+  document.querySelectorAll('.status-chip').forEach(btn => {
+    const active = btn.dataset.statusFilter === orderStatusFilter;
+    btn.style.background = active ? 'var(--accent)' : 'var(--bg-raised)';
+    btn.style.color = active ? '#FFFFFF' : 'var(--text)';
+  });
+}
+
+function filterOrderList(){
+  const q = (document.getElementById('order-search')?.value || '').trim().toLowerCase();
+  const cards = document.querySelectorAll('#order-list-rows .order-card');
+  let visibleCount = 0;
+  cards.forEach(c => {
+    const matchesText = !q || c.dataset.search.includes(q);
+    const matchesStatus = orderStatusFilter === 'all' || c.dataset.status === orderStatusFilter;
+    const match = matchesText && matchesStatus;
+    c.style.display = match ? '' : 'none';
+    if(match) visibleCount++;
+  });
+  let noResultEl = document.getElementById('order-search-noresult');
+  if(visibleCount === 0){
+    if(!noResultEl){
+      noResultEl = document.createElement('div');
+      noResultEl.id = 'order-search-noresult';
+      noResultEl.className = 'empty';
+      noResultEl.textContent = 'Koi order na malyu.';
+      document.getElementById('order-list-rows').appendChild(noResultEl);
+    }
+  } else if(noResultEl){
+    noResultEl.remove();
+  }
+}
+
+/* -------- Order detail: packing check + recheck -------- */
+function renderOrderDetail(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o){ currentOrderId=null; render(); return; }
+
+  document.getElementById('headerContent').innerHTML = `
+    <div class="topbar">
+      <button class="backbtn" onclick="goToOrder(null)">←</button>
+      <div style="flex:1;">
+        <div class="brand-name">${o.orderNo} — ${o.party}</div>
+        <div class="brand-sub">${o.location ? o.location+' · ' : ''}${statusLabel(o.status)}</div>
+      </div>
+    </div>`;
+
+  if(currentRole === 'picker'){
+    // Picker only ever does blind packing entry. Once submitted, nothing
+    // more to see here — ordered qty, mismatch and billing stay hidden.
+    if(o.status === 'pending' || o.status === 'checking'){
+      renderPackingCheck(o);
+    } else {
+      main.innerHTML = `<div class="empty">✓ Aa order submit thai gayu che. Dispatcher check karshe.</div>`;
+    }
+    return;
+  }
+
+  if(o.status === 'billed'){
+    renderFinalBill(o);
+    return;
+  }
+  if(o.status === 'ready'){
+    renderRecheck(o);
+    return;
+  }
+  renderPackingCheck(o);
+}
+
+let pickerIdx = 0; // which item index the picker is currently on
+
+function renderPackingCheck(o){
+  const blind = currentRole === 'picker';
+
+  if(blind){
+    renderPickerSingleItem(o);
+    return;
+  }
+
+  // Full view (CEO/Dispatcher): all items, each with a done/pending badge
+  // and who picked it, so nobody has to guess what's finished. Sorted by
+  // rack location so items are grouped in walking order.
+  const sortedIdxs = locationSortedIndices(o);
+  const rows = sortedIdxs.map((idx, srNo)=>{
+    const it = o.items[idx];
+    const aq = it.aqty != null ? it.aqty : '';
+    const ar = it.arate !== null ? it.arate : '';
+    const mismatch = it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
+    const done = it.aqty != null;   // != catches null AND undefined
+    const stk = stockLookup(it.code);
+    return `
+      <div class="item-row ${mismatch?'mismatch':''} ${it.billed?'already-billed':''}" id="row-${idx}" data-search="${(it.code+' '+it.desc).toLowerCase()}">
+        <div class="item-top">
+          <div>
+            <div class="item-code">${srNo+1}. ${it.code} <span style="color:${done?'var(--ok)':'var(--bad)'}; font-weight:700;">${done?'✓':'✗'}</span></div>
+            <div class="item-desc">${it.desc}</div>
+            ${stk ? `<div class="loc-line">📍 ${stk.location || '—'}<span class="loc-stock">STOCK ${stk.qty ?? '—'}</span></div>` : ''}
+            ${it.billed ? `<div class="billed-tag">✓ BILL MA AAVI GAYU — fari na kadho</div>` : ''}
+            ${done && it.pickedBy ? `<div class="fab-note" style="margin:2px 0 0; text-align:left;">Kadhyu: ${it.pickedBy}</div>` : ''}
+          </div>
+        </div>
+        <div class="item-grid">
+          <div class="field">
+            <label>ORDERED QTY</label>
+            <div class="readonly">${it.oqty}</div>
+          </div>
+          <div class="field">
+            <label>MRP</label>
+            <div class="readonly">${fmt(mrpOf(it))}</div>
+          </div>
+          <div class="field">
+            <label>ACTUAL QTY</label>
+            <input inputmode="decimal" placeholder="${it.oqty}" value="${aq}" oninput="updateItem('${o.id}', ${idx}, 'aqty', this.value)">
+          </div>
+          <div class="field">
+            <label>ACTUAL RATE</label>
+            <input inputmode="decimal" placeholder="${mrpOf(it)}" value="${ar}" oninput="updateItem('${o.id}', ${idx}, 'arate', this.value)">
+          </div>
+        </div>
+        <div class="mismatch-tag ${mismatch ? '' : 'hidden'}" id="tag-${idx}">⚠ Ordered thi alag che — check karo</div>
+      </div>`;
+  }).join('');
+
+  main.innerHTML = `
+    <div class="field" style="margin-bottom:12px;">
+      <input id="item-search" placeholder="Item code ya naam search karo..." oninput="filterItemRows()"
+        style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
+    </div>
+    ${o.items.filter(it=>it.billed).length ? `<div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ ${o.items.filter(it=>it.billed).length} item nu bill pehla thi bani gayu che — e lila ma che, fari na kadhso.</div>` : ''}
+    <div class="status-banner">Har item ni Actual Qty ane Actual Rate bharo. Khali rakhso to Ordered value j use thashe. Farak hoy to row lal thai jashe. ✓/✗ batave che picker e kaam puru karyu ke nahi.</div>
+    <div id="item-rows-container">${rows}</div>
+    <button class="btn btn-primary" onclick="finishPacking('${o.id}')">Packing Done → Recheck</button>
+  `;
+}
+
+function filterItemRows(){
+  const q = (document.getElementById('item-search')?.value || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#item-rows-container .item-row');
+  rows.forEach(r => {
+    r.style.display = (!q || r.dataset.search.includes(q)) ? '' : 'none';
+  });
+}
+
+function renderPickerSingleItem(o){
+  const sortedIdxs = locationSortedIndices(o);
+  // clamp to first not-done item (in location order) so a picker never re-does a finished one
+  // Skip anything already done AND anything a bill has already taken --
+  // those goods are out of the shop, picking them again is the mistake
+  // this is here to stop.
+  while(pickerIdx < sortedIdxs.length &&
+        (o.items[sortedIdxs[pickerIdx]].done || o.items[sortedIdxs[pickerIdx]].billed)) pickerIdx++;
+
+  if(pickerIdx >= sortedIdxs.length){
+    // everything done -- submit and hand off to dispatcher
+    main.innerHTML = `<div class="empty">✓ Badha item puru thai gaya. Submit thai rahyu che...</div>`;
+    finishPacking(o.id);
+    return;
+  }
+
+  const realIdx = sortedIdxs[pickerIdx];
+  const it = o.items[realIdx];
+  const total = sortedIdxs.length;
+  const stk = stockLookup(it.code);
+  main.innerHTML = `
+    <div class="status-banner">Item ${pickerIdx+1} of ${total} — Ordered Qty joi ne Actual Qty/Rate bharo.</div>
+    <div class="item-row" id="row-${realIdx}">
+      <div class="item-top">
+        <div>
+          <div class="item-code">${it.code}</div>
+          <div class="item-desc">${it.desc}</div>
+          ${stk ? `<div class="loc-line">📍 ${stk.location || '—'}<span class="loc-stock">STOCK ${stk.qty ?? '—'}</span></div>` : ''}
+        </div>
+      </div>
+      <div class="item-grid">
+        <div class="field">
+          <label>ORDERED QTY</label>
+          <div class="readonly">${it.oqty}</div>
+        </div>
+        <div class="field">
+          <label>MRP</label>
+          <div class="readonly">${fmt(mrpOf(it))}</div>
+        </div>
+        <div class="field">
+          <label>ACTUAL QTY</label>
+          <input id="picker-qty" inputmode="decimal" placeholder="${it.oqty}">
+        </div>
+        <div class="field">
+          <label>ACTUAL RATE</label>
+          <input id="picker-rate" inputmode="decimal" placeholder="${mrpOf(it)}">
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="confirmPickerItem('${o.id}', ${realIdx})">✓ Aa Item Thai Gayu — Next</button>
+  `;
+}
+
+function confirmPickerItem(orderId, idx){
+  const o = orders.find(x=>x.id===orderId);
+  const it = o.items[idx];
+  const qtyVal = document.getElementById('picker-qty').value;
+  const rateVal = document.getElementById('picker-rate').value;
+  it.aqty = qtyVal === '' ? it.oqty : Number(qtyVal);
+  it.arate = rateVal === '' ? mrpOf(it) : Number(rateVal);
+  it.done = true;
+  it.pickedBy = currentName || currentPhone || 'Picker';
+  if(o.status === 'pending') o.status = 'checking';
+  DB.save(orders);
+  pickerIdx++;
+  render();
+}
+
+function updateItem(orderId, idx, field, value){
+  const o = orders.find(x=>x.id===orderId);
+  o.items[idx][field] = value === '' ? null : Number(value);
+  if(o.status === 'pending') o.status = 'checking';
+  DB.save(orders);
+  const it = o.items[idx];
+  const mismatch = it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
+  const rowEl = document.getElementById(`row-${idx}`);
+  const tagEl = document.getElementById(`tag-${idx}`);
+  if(rowEl) rowEl.classList.toggle('mismatch', mismatch);
+  if(tagEl) tagEl.classList.toggle('hidden', !mismatch);
+}
+
+function finishPacking(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  // fill blanks with ordered values
+  o.items.forEach(it=>{
+    if(it.aqty===null) it.aqty = it.oqty;
+    if(it.arate===null) it.arate = mrpOf(it);
+  });
+  o.status = 'ready';
+  DB.save(orders);
+  render();
+}
+
+function renderRecheck(o){
+  const rows = o.items.map(it=>{
+    const qtyMismatch = it.aqty != null && Number(it.aqty) !== Number(it.oqty);
+    const rateMismatch = it.arate != null && Number(it.arate) !== Number(mrpOf(it));
+    const mismatch = qtyMismatch || rateMismatch;
+    return `
+      <div class="recheck-row ${mismatch?'mismatch':''}">
+        <div class="desc">${it.desc}<div class="code">${it.code}</div></div>
+        <div>
+          <div class="colhead">QTY</div>
+          <div class="num ${qtyMismatch?'diff':''}">${it.oqty} → ${it.aqty}</div>
+        </div>
+        <div>
+          <div class="colhead">RATE</div>
+          <div class="num ${rateMismatch?'diff':''}">${fmt(mrpOf(it))} → ${fmt(it.arate)}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(mrpOf(it)), 0);
+  const mismatchCount = o.items.filter(it=>
+    (it.aqty != null && Number(it.aqty)!==Number(it.oqty)) ||
+    (it.arate != null && Number(it.arate)!==Number(mrpOf(it)))).length;
+
+  main.innerHTML = `
+    <div class="status-banner">${mismatchCount ? '⚠ '+mismatchCount+' item ma Ordered ane Actual alag che — bill banavta pehla ek var joi levu.' : '✓ Badha item Ordered mujab j che.'}</div>
+    ${rows}
+    <div class="summary-card">
+      <div class="summary-line total"><span>Final Bill Amount</span><span class="val">₹ ${fmt(total)}</span></div>
+    </div>
+    ${currentRole === 'ceo'
+      ? `<button class="btn btn-primary" onclick="confirmBill('${o.id}')">Confirm &amp; Generate Bill</button>`
+      : `<div class="fab-note">Matra CEO j bill confirm kari shake che.</div>`}
+    <button class="btn btn-ghost" onclick="backToPacking('${o.id}')">← Back, edit qty/rate</button>
+  `;
+}
+
+function backToPacking(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  o.status = 'checking';
+  DB.save(orders);
+  render();
+}
+
+function confirmBill(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  o.status = 'billed';
+  o.billedAt = new Date().toISOString();
+  DB.save(orders);
+  render();
+}
+
+function renderFinalBill(o){
+  const rows = o.items.map(it=>`
+    <div class="recheck-row">
+      <div class="desc">${it.desc}<div class="code">${it.code}</div></div>
+      <div><div class="colhead">QTY</div><div class="num">${it.aqty}</div></div>
+      <div><div class="colhead">AMOUNT</div><div class="num">${fmt((it.aqty ?? it.oqty ?? 0)*mrpOf(it))}</div></div>
+    </div>`).join('');
+  const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(mrpOf(it)), 0);
+
+  main.innerHTML = `
+    <div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ Bill confirmed. Value-FAS ma final entry mate ready.</div>
+    ${rows}
+    <div class="summary-card">
+      <div class="summary-line total"><span>Net Amount</span><span class="val">₹ ${fmt(total)}</span></div>
+    </div>
+    ${currentRole==='ceo' ? `<button class="btn btn-ghost" onclick="resetToPending('${o.id}')">↺ Reset to Pending (galti thi Billed thayu hoy to)</button>` : ''}
+  `;
+}
+
+function resetToPending(orderId){
+  if(!confirm('Aa order pacho "Pending" ma levo che? Value-FAS ma bill banavyu hoy to e alag thi delete karvu padse.')) return;
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  o.status = 'pending';
+  o.fasEntryStarted = false;
+  DB.save(orders);
+  currentOrderId = null;
+  render();
+}
+
+/* -------- Add order manually removed: all orders now come
+   automatically from Value-FAS via the sync script. -------- */
+
+async function syncNowOnLoad(){
+  if(!FIREBASE_CONFIGURED || !currentRole) return;
+  const remote = await pullFromSupabase();
+  if(remote === null) return;
+  orders = sortOrders(remote);
+  localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
+  if(!currentOrderId) render();
+}
+
+function locationSortedIndices(o){
+  // Sort item indices by rack Location (stock lookup) so a picker walks
+  // the warehouse in order instead of jumping around. Items with no
+  // known location sort to the end.
+  const idxs = o.items.map((_, i) => i);
+  idxs.sort((a, b) => {
+    const la = stockLookup(o.items[a].code)?.location || '';
+    const lb = stockLookup(o.items[b].code)?.location || '';
+    if(!la && !lb) return a - b;
+    if(!la) return 1;
+    if(!lb) return -1;
+    return la.localeCompare(lb);
+  });
+  return idxs;
+}
+
+function mrpOf(it){
+  // The item's real MRP is ItemMast.SRate, which reaches us on the STOCK
+  // record as `rate`. What the order carries in `it.mrp` is actually
+  // InvTran.NetRate -- the rate this party is billed at AFTER their
+  // discount -- so it is not the printed price and must not be labelled
+  // MRP. Fall back to it only when the item is not in the stock cache.
+  const s = stockLookup(it.code);
+  const r = s ? Number(s.rate) : 0;
+  return (r > 0) ? r : Number(it.mrp ?? 0);
+}
+
+function stockLookup(code){
+  if(!stockCache) return null;
+  return stockCache.find(s => s.code === code) || null;
+}
+
+async function preloadStock(){
+  if(stockCache) return;
+  // Cache in localStorage for 15 min -- the stock catalog can be
+  // thousands of docs, and re-fetching all of it on every single page
+  // load across every phone is what burns through the Firestore free
+  // read quota in a single afternoon.
+  const CACHE_KEY = 'orderflow_stock_cache';
+  const CACHE_MS = 2 * 60 * 1000;
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(Date.now() - parsed.ts < CACHE_MS){
+        stockCache = parsed.data;
+        return;
+      }
+    }
+  }catch(e){}
+  stockCache = await fetchAllStock();
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts: Date.now(), data: stockCache})); }catch(e){}
+}
+
+render();
+syncNowOnLoad();
+preloadStock();
+startLiveSync();
+</script>
+</body>
+</html>
