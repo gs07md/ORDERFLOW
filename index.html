@@ -444,11 +444,21 @@ function fmt(n){
   return Number(n).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
+/* STATUS
+   pending  -> order came from Value-FAS, nobody has touched it
+   checking -> a picker is packing it
+   ready    -> packed, sitting on the recheck screen
+   packed   -> recheck confirmed HERE. The data is handed to Bill Maker.
+               OrderFlow does NOT make bills -- this is as far as it goes.
+   billed   -> Bill Maker asked for the bill (fas_entry_started false),
+               then the PC made it and checked the MDB (true) = green. */
 function statusLabel(s){
-  return {pending:'Pending Check', checking:'In Packing', ready:'Ready to Bill', billed:'Billed'}[s] || s;
+  return {pending:'Pending Check', checking:'In Packing', ready:'Ready to Bill',
+          packed:'Bill Maker ma', billed:'Billed'}[s] || s;
 }
 function statusPillClass(s){
-  return {pending:'pending', checking:'checking', ready:'ready', billed:'billed'}[s] || 'pending';
+  return {pending:'pending', checking:'checking', ready:'ready',
+          packed:'ready', billed:'billed'}[s] || 'pending';
 }
 
 /* -------- routing -------- */
@@ -810,9 +820,9 @@ function renderOrderList(){
 
   // A count on screen, so "only a few showing" is obviously a filter or a
   // scroll position -- not the list having failed to load.
-  const statusCounts = {pending:0, checking:0, ready:0, billed:0};
+  const statusCounts = {pending:0, checking:0, ready:0, packed:0, billed:0};
   orders.forEach(o => { if(statusCounts[o.status]!==undefined) statusCounts[o.status]++; });
-  const filterChips = ['all','pending','checking','ready','billed'].map(s => {
+  const filterChips = ['all','pending','checking','ready','packed','billed'].map(s => {
     const label = s==='all' ? `All (${orders.length})` : `${statusLabel(s)} (${statusCounts[s]||0})`;
     return `<button class="status-chip" data-status-filter="${s}" onclick="setOrderStatusFilter('${s}')">${label}</button>`;
   }).join('');
@@ -825,7 +835,7 @@ function renderOrderList(){
     <div id="status-chip-row" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px;">${filterChips}</div>
     ${isCeo ? `<div id="batch-bill-bar" class="hidden" style="display:none; align-items:center; gap:10px; background:var(--accent-dim); border-radius:8px; padding:10px 12px; margin-bottom:12px;">
       <span id="batch-bill-count" style="font-size:13px; font-weight:600; color:var(--accent);">0 order pasand karya</span>
-      <button class="btn btn-primary" style="margin:0; width:auto; padding:8px 16px;" onclick="generateBatchBills()">Badha na Bill Banavo</button>
+      <button class="btn btn-primary" style="margin:0; width:auto; padding:8px 16px;" onclick="generateBatchBills()">Bill Maker ma mokalo</button>
     </div>` : ''}
     <div class="section-label">Today's orders</div>
     <div id="order-list-rows">${rows}</div>
@@ -843,14 +853,16 @@ function updateBatchBillBar(){
 }
 
 function generateBatchBills(){
+  // Hands the picked orders to Bill Maker. It does NOT make a bill --
+  // the bill is made only from Bill Maker's own "Make Bills" button.
   const ids = [...document.querySelectorAll('.batch-bill-check:checked')].map(c => c.dataset.orderId);
   if(ids.length === 0) return;
-  if(!confirm(`${ids.length} order na bill ek sathe banavva che?`)) return;
+  if(!confirm(`${ids.length} order Bill Maker ma mokalva che?\n\nBill ahiya nai bane — Bill Maker ma select karsho tyare j banse.`)) return;
   ids.forEach(id => {
     const o = orders.find(x => x.id === id);
     if(o && o.status === 'ready'){
-      o.status = 'billed';
-      o.billedAt = new Date().toISOString();
+      o.status = 'packed';
+      o.packedAt = new Date().toISOString();
     }
   });
   DB.save(orders);
@@ -921,7 +933,7 @@ function renderOrderDetail(id){
     return;
   }
 
-  if(o.status === 'billed'){
+  if(o.status === 'billed' || o.status === 'packed'){
     renderFinalBill(o);
     return;
   }
@@ -1130,7 +1142,7 @@ function renderRecheck(o){
       <div class="summary-line total"><span>Final Bill Amount</span><span class="val">₹ ${fmt(total)}</span></div>
     </div>
     ${currentRole === 'ceo'
-      ? `<button class="btn btn-primary" onclick="confirmBill('${o.id}')">Confirm &amp; Generate Bill</button>`
+      ? `<button class="btn btn-primary" onclick="confirmBill('${o.id}')">Confirm &amp; Bill Maker ma mokalo</button>`
       : `<div class="fab-note">Matra CEO j bill confirm kari shake che.</div>`}
     <button class="btn btn-ghost" onclick="backToPacking('${o.id}')">← Back, edit qty/rate</button>
   `;
@@ -1144,9 +1156,16 @@ function backToPacking(orderId){
 }
 
 function confirmBill(orderId){
+  // OrderFlow does NOT make the bill. It hands the packed order over to
+  // Bill Maker, and the bill is made only when somebody picks it there
+  // and taps "Make Bills".
+  //
+  // This used to set status 'billed' with fas_entry_started false --
+  // which is exactly the signal the PC watches for. So confirming here
+  // fired a bill off immediately, behind the CEO's back.
   const o = orders.find(x=>x.id===orderId);
-  o.status = 'billed';
-  o.billedAt = new Date().toISOString();
+  o.status = 'packed';
+  o.packedAt = new Date().toISOString();
   DB.save(orders);
   render();
 }
@@ -1161,7 +1180,7 @@ function renderFinalBill(o){
   const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(mrpOf(it)), 0);
 
   main.innerHTML = `
-    <div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ Bill confirmed. Value-FAS ma final entry mate ready.</div>
+    <div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ Bill Maker ma mokli didhu. Bill tya thi select karsho tyare j banse.</div>
     ${rows}
     <div class="summary-card">
       <div class="summary-line total"><span>Net Amount</span><span class="val">₹ ${fmt(total)}</span></div>
