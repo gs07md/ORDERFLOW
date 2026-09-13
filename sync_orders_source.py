@@ -262,6 +262,146 @@ def push_orders_to_supabase(new_orders):
 
 
 
+def _known_path():
+    return Path(os.path.dirname(os.path.abspath(__file__))) / ".known_orders.json"
+
+
+def _load_known():
+    try:
+        return set(json.loads(_known_path().read_text()))
+    except Exception:
+        return set()
+
+
+def _save_known(known):
+    try:
+        _known_path().write_text(json.dumps(sorted(known)))
+    except Exception:
+        pass
+
+
+def _sb(method, path, body=None, timeout=30):
+    req = urllib.request.Request(
+        f"{SUPABASE_URL}/rest/v1/{path}",
+        data=json.dumps(body).encode("utf-8") if body is not None else None,
+        method=method, headers=SB_HEADERS)
+    resp = urllib.request.urlopen(req, timeout=timeout)
+    raw = resp.read()
+    return json.loads(raw) if raw else None
+
+
+def _touched(row):
+    """Has anybody on the shop floor entered a qty or rate on this row?"""
+    for it in (row.get("items") or []):
+        if it.get("aqty") is not None or it.get("arate") is not None:
+            return True
+    return row.get("status") not in (None, "", "pending")
+
+
+def sync_order_dates():
+    """Follow an order when its date is moved in Value-FAS.
+
+    Staff push an open order's delivery date forward. Value-FAS just
+    changes BillDate on the same order. This script, though, builds its
+    row id as vfs-{BillDate}-{order_no} and only ever INSERTS -- so the
+    bumped order turned up as a brand new row under the new date while
+    the old row sat on the old date for ever. That is why an order still
+    shows on a day after its date was changed, and why the same order
+    appears twice.
+
+    So: for every order the website still holds open, look up the date
+    Value-FAS has for it NOW. Move the row to that date, and clear out
+    any duplicate of the same order -- keeping whichever copy the shop
+    floor has actually worked on."""
+    try:
+        rows = _sb("GET", "orders?status=neq.billed"
+                          "&select=id,order_no,order_date,status,items")
+    except Exception as e:
+        print(f"[warn] Could not read orders to check dates: {e}")
+        return
+    if not rows:
+        return
+
+    # what Value-FAS holds right now
+    try:
+        db_path = resolve_db_path()
+        conn = pyodbc.connect(
+            r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
+            rf"DBQ={db_path};ReadOnly=1;")
+        cur = conn.cursor()
+        cur.execute("SELECT BillC, Bill, BillDate FROM InvMast "
+                    "WHERE Entry = ? AND Book = 'SAL'", (ORDER_ENTRY_CODE,))
+        live = {}
+        for billc, bill, billdate in cur.fetchall():
+            if not billdate:
+                continue
+            try:
+                no = str(int(float(bill)))
+            except (TypeError, ValueError):
+                no = str(bill).strip()
+            live[no] = (str(billc or ""), billdate.date().isoformat())
+        conn.close()
+    except Exception as e:
+        print(f"[warn] Could not read Value-FAS order dates: {e}")
+        return
+    if not live:
+        return
+
+    by_no = {}
+    for r in rows:
+        by_no.setdefault(str(r.get("order_no") or "").strip(), []).append(r)
+
+    known = _load_known()
+    moved = removed = 0
+    for order_no, group in by_no.items():
+        cur_live = live.get(order_no)
+        if not cur_live:
+            continue                      # not an open order any more
+        billc, want_date = cur_live
+        want_id = f"vfs-{want_date}-{billc}{order_no}"
+
+        # keep the copy the shop floor has worked on; failing that, the
+        # one already sitting on the right date; failing that, the first.
+        keep = next((r for r in group if _touched(r)), None)
+        if keep is None:
+            keep = next((r for r in group if r.get("order_date") == want_date),
+                        group[0])
+
+        if keep.get("order_date") != want_date:
+            try:
+                _sb("PATCH", f"orders?id=eq.{urllib.parse.quote(str(keep['id']), safe='')}",
+                    {"order_date": want_date})
+                print(f"[info] Order {order_no}: date moved "
+                      f"{keep.get('order_date')} -> {want_date}")
+                moved += 1
+            except Exception as e:
+                print(f"[warn] Could not move order {order_no}: {e}")
+                continue
+
+        for r in group:
+            if r["id"] == keep["id"]:
+                continue
+            if _touched(r):
+                print(f"[keep] Duplicate of order {order_no} left alone -- "
+                      f"staff had entered something on it.")
+                continue
+            try:
+                _sb("DELETE", f"orders?id=eq.{urllib.parse.quote(str(r['id']), safe='')}")
+                known.discard(r["id"])
+                removed += 1
+            except Exception as e:
+                print(f"[warn] Could not remove duplicate {r['id']}: {e}")
+
+        # stop the insert-only push from making the duplicate again
+        known.add(want_id)
+        known.add(keep["id"])
+
+    if moved or removed:
+        _save_known(known)
+        print(f"[info] Date check: {moved} order(s) moved, "
+              f"{removed} duplicate(s) removed.")
+
+
 def billed_order_items(cur, days_back=45):
     """{order_no: {ItemCode, ...}} -- every item a real Sale bill has
     already taken off an order.
@@ -592,12 +732,13 @@ def existing_keys(ws, last_row):
 
 def main():
     print("[version] sync_orders v7 -- stock = Opening + Receive - Issue, "
-          "batched, already-billed orders closed")
+          "batched, billed + date-moved orders handled")
     output_path = get_output_path()
     print(f"[info] Orders.xlsx will be saved to: {output_path}")
 
     new_orders = fetch_new_orders()
     push_orders_to_supabase(new_orders)
+    sync_order_dates()
     mark_billed_orders()
     push_stock_to_supabase(push_all="--stock-all" in sys.argv)
     wb, ws = load_or_create_workbook(output_path)
