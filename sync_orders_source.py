@@ -691,9 +691,19 @@ def load_or_create_workbook(output_path):
                 print(f"[warn] Moved it to {os.path.basename(spoilt)} and "
                       f"started a fresh one. Nothing else was affected.")
             except Exception as e2:
-                print(f"[error] {output_path} is unreadable AND could not be "
-                      f"moved aside: {e2}")
-                raise
+                # Corrupt AND locked (Excel or OneDrive has it open). The
+                # spreadsheet is a side-product: orders, dates, billed
+                # marks and stock have ALL already gone to Supabase by
+                # the time we get here. Raising took the whole sync down
+                # every three seconds and filled the window with
+                # tracebacks, which is how it looked like billing was
+                # broken. Skip the spreadsheet and carry on.
+                print(f"[warn] {os.path.basename(output_path)} is unreadable "
+                      f"AND cannot be moved aside ({type(e2).__name__}).")
+                print("[warn] Close it in Excel, or rename it, and it will "
+                      "start again. Skipping the spreadsheet this cycle -- "
+                      "orders and stock are already synced.")
+                return None, None
             existing = False
     if existing:
         wb = openpyxl.load_workbook(output_path)
@@ -731,7 +741,7 @@ def existing_keys(ws, last_row):
 
 
 def main():
-    print("[version] sync_orders v7 -- stock = Opening + Receive - Issue, "
+    print("[version] sync_orders v8 -- stock = Opening + Receive - Issue, "
           "batched, billed + date-moved orders handled")
     output_path = get_output_path()
     print(f"[info] Orders.xlsx will be saved to: {output_path}")
@@ -742,6 +752,8 @@ def main():
     mark_billed_orders()
     push_stock_to_supabase(push_all="--stock-all" in sys.argv)
     wb, ws = load_or_create_workbook(output_path)
+    if wb is None:
+        return                      # spreadsheet skipped; the sync is done
 
     last_row = HEADER_ROW
     r = FIRST_DATA_ROW
@@ -781,8 +793,13 @@ def main():
         ws.cell(row=total_row, column=9, value=f"=SUM(I{FIRST_DATA_ROW}:I{last_row})").font = Font(name=FONT, bold=True)
         ws.cell(row=total_row, column=9).number_format = '#,##0.00'
 
-        wb.save(output_path)
-        print(f"[done] Added {added} new order line(s) to {output_path}")
+        try:
+            wb.save(output_path)
+            print(f"[done] Added {added} new order line(s) to {output_path}")
+        except Exception as e:
+            print(f"[warn] Could not save {os.path.basename(output_path)} "
+                  f"({type(e).__name__}: {e}) -- it is probably open in "
+                  f"Excel. Everything else is already synced.")
     else:
         print("[done] No new orders found -- Orders.xlsx already up to date (or check the Entry codes printed above).")
 
