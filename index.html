@@ -41,6 +41,25 @@
   .brand-name{ font-size:15.5px; font-weight:600; letter-spacing:.2px; color:#FFFFFF; }
   .brand-sub{ font-size:11.5px; color:rgba(255,255,255,.62); margin-top:1px; }
 
+  /* ---- Which day are we looking at (same idea as Bill Maker) ---- */
+  .datebar{ display:flex; gap:7px; margin-top:11px; align-items:center; }
+  .datebar .db{
+    flex:1; min-width:0; padding:8px 6px; font-size:12.5px; font-weight:600;
+    font-family:inherit; color:#FFFFFF; background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.22); border-radius:8px; cursor:pointer;
+  }
+  .datebar .db.active{ background:#FFFFFF; color:var(--navy); border-color:#FFFFFF; }
+  .datebar input[type=date]{
+    flex:1.15; min-width:0; padding:7px 8px; font-size:12.5px; font-family:inherit;
+    color:#FFFFFF; background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.22); border-radius:8px;
+  }
+  .oldday{
+    background:#FFF8E6; border:1px solid #F0DCA8; color:#7A5B12;
+    padding:10px 12px; border-radius:10px; font-size:12.5px; line-height:1.45;
+    margin-bottom:12px;
+  }
+
   main{ padding:14px 16px 8px; max-width:640px; margin:0 auto; }
 
   /* ---- Order list ---- */
@@ -319,6 +338,61 @@ async function anyUsersExist(){
   return users.length > 0;
 }
 
+/* =========================================================================
+   WHICH DAY ARE WE LOOKING AT
+
+   Bill Maker has had Today / Yesterday / any date from the start.
+   OrderFlow only ever showed today, so a mistake made yesterday could
+   not be looked at from the phone at all. Asked for on 15-09-2026:
+   "mare order flow ma pn date vise joi same as bill maker ni jm ke su
+   bhul kri kale teh check kri sakay".
+
+   The choice is NOT remembered between visits, on purpose. The app
+   opens on today every single time, so nobody walks up to a phone
+   somebody left on an old date and starts picking into yesterday.
+   ========================================================================= */
+let viewDay = 'today';        // 'today' | 'yesterday' | 'YYYY-MM-DD'
+
+function localYmd(d){
+  // The PHONE'S OWN date. The old code used
+  // new Date().toISOString().slice(0,10), which is UTC -- and India is
+  // 5.5 hours ahead, so between midnight and 5:30am it asked for
+  // YESTERDAY and the morning's orders looked like they had not
+  // arrived at all.
+  return d.getFullYear() + '-' +
+         String(d.getMonth() + 1).padStart(2, '0') + '-' +
+         String(d.getDate()).padStart(2, '0');
+}
+
+function chosenDate(){
+  if(viewDay === 'today') return localYmd(new Date());
+  if(viewDay === 'yesterday'){
+    const d = new Date(); d.setDate(d.getDate() - 1); return localYmd(d);
+  }
+  return viewDay;                       // an explicit YYYY-MM-DD
+}
+
+function viewingToday(){ return chosenDate() === localYmd(new Date()); }
+
+function prettyDate(ymd){
+  const [y, m, d] = ymd.split('-');
+  return d + '-' + m + '-' + y;
+}
+
+async function pickDay(which){
+  viewDay = which;
+  currentOrderId = null;      // never leave an old day's order open
+  orders = [];
+  render();                   // show the new day's header at once
+  await syncNowOnLoad();
+  render();
+}
+
+function pickCustom(){
+  const el = document.getElementById('ofdate');
+  if(el && el.value) pickDay(el.value);
+}
+
 const DB = {
   load(){
     const raw = localStorage.getItem('orderflow_orders_v2');
@@ -346,10 +420,10 @@ async function pushAllToSupabase(orders){
 async function pullFromSupabase(){
   if(!FIREBASE_CONFIGURED) return null;
   try{
-    const today = new Date().toISOString().slice(0,10);
-    // Filter by today's date server-side -- cheaper and faster than
+    const day = chosenDate();
+    // Filter by the chosen date server-side -- cheaper and faster than
     // pulling every historical order and filtering in the browser.
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_date=eq.${today}&select=*`, {headers: SB_HEADERS});
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_date=eq.${day}&select=*`, {headers: SB_HEADERS});
     const rows = await res.json();
     if(!Array.isArray(rows)) return null;
     return sortOrders(rows.map(rowToOrder));
@@ -381,7 +455,11 @@ function startLiveSync(){
     const nextJson = JSON.stringify(newOrders);
     if(nextJson === JSON.stringify(orders)) return;   // nothing changed -- don't repaint
     orders = newOrders;
-    localStorage.setItem('orderflow_orders_v2', nextJson);
+    // Only today's list is worth keeping for the next visit. Writing an
+    // old day's orders here would show them for a moment on the next
+    // open, before the first pull lands -- exactly the kind of thing
+    // that gets picked into by mistake.
+    if(viewingToday()) localStorage.setItem('orderflow_orders_v2', nextJson);
     if(!currentOrderId) render();
   }, 3000);
 }
@@ -776,6 +854,11 @@ function renderOrderList(){
         <div class="brand-sub">Shree Giriraj Auto Parts — order → pack check → bill</div>
       </div>
       <span class="role-badge" onclick="switchRole()">${currentRole==='picker'?'PICKER':currentRole==='ceo'?'CEO':'DISPATCHER'} ⇄</span>
+    </div>
+    <div class="datebar">
+      <button type="button" class="db ${viewDay==='today'?'active':''}" onclick="pickDay('today')">Today</button>
+      <button type="button" class="db ${viewDay==='yesterday'?'active':''}" onclick="pickDay('yesterday')">Yesterday</button>
+      <input type="date" id="ofdate" max="${localYmd(new Date())}" value="${viewingToday()?'':chosenDate()}" onchange="pickCustom()">
     </div>`;
 
   if(currentRole === 'ceo'){
@@ -787,7 +870,13 @@ function renderOrderList(){
   }
 
   if(orders.length === 0){
-    main.innerHTML = `<div class="empty">Koi order nathi. Value-FAS ma navi order banavta j apoap aavi jashe.</div>`;
+    main.innerHTML = (viewingToday()
+      ? ''
+      : `<div class="oldday"><b>${prettyDate(chosenDate())}</b> nu juo cho — aaj nu nahi.
+           <span style="text-decoration:underline; cursor:pointer;" onclick="pickDay('today')">Aaj par pacha jao</span></div>`)
+      + `<div class="empty">${viewingToday()
+            ? 'Koi order nathi. Value-FAS ma navi order banavta j apoap aavi jashe.'
+            : prettyDate(chosenDate()) + ' na divase koi order nathi.'}</div>`;
     return;
   }
 
@@ -828,6 +917,11 @@ function renderOrderList(){
   }).join('');
 
   main.innerHTML = `
+    ${viewingToday() ? '' : `<div class="oldday">
+      <b>${prettyDate(chosenDate())}</b> na order juo cho — aaj na nahi. Ahiya
+      badlo karsho toh e <b>e j divas</b> na order ma jashe.
+      <span style="text-decoration:underline; cursor:pointer;" onclick="pickDay('today')">Aaj par pacha jao</span>
+    </div>`}
     <div class="field" style="margin-bottom:10px;">
       <input id="order-search" placeholder="Order no, party, location ya item code search karo..." oninput="filterOrderList()"
         style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
@@ -837,7 +931,7 @@ function renderOrderList(){
       <span id="batch-bill-count" style="font-size:13px; font-weight:600; color:var(--accent);">0 order pasand karya</span>
       <button class="btn btn-primary" style="margin:0; width:auto; padding:8px 16px;" onclick="generateBatchBills()">Bill Maker ma mokalo</button>
     </div>` : ''}
-    <div class="section-label">Today's orders</div>
+    <div class="section-label">${viewingToday() ? "Today's orders" : prettyDate(chosenDate()) + ' na order'}</div>
     <div id="order-list-rows">${rows}</div>
     <div class="fab-note">Order Value-FAS mathi apoap aave che. Yaadi dar 3 second e taji thay che.</div>`;
   updateStatusChipStyles();
@@ -1208,7 +1302,7 @@ async function syncNowOnLoad(){
   const remote = await pullFromSupabase();
   if(remote === null) return;
   orders = sortOrders(remote);
-  localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
+  if(viewingToday()) localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
   if(!currentOrderId) render();
 }
 
