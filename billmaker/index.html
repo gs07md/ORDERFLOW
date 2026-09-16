@@ -59,6 +59,11 @@ input[type=date]{padding:10px;background:#fff;color:#2c333b;border:1px solid #d7
 .send{padding:13px 24px;font-size:15px;font-weight:700;font-family:inherit;background:#2e6fc0;color:#fff;border:none;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(46,111,192,.32);}
 .send:active{background:#235aa3;}
 .send:disabled{background:#e6eaee;color:#aab2bb;box-shadow:none;}
+.stop{padding:13px 20px;font-size:15px;font-weight:700;font-family:inherit;background:#c33a32;color:#fff;border:none;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(195,58,50,.32);}
+.stop:active{background:#a52f28;}
+.stop:disabled{background:#e6eaee;color:#aab2bb;box-shadow:none;}
+.stop.waiting{background:#b06a12;box-shadow:0 4px 14px rgba(176,106,18,.32);}
+.btns{display:flex;align-items:center;gap:9px;}
 .result{background:#f5f9f6;border:1px solid #cce8d4;border-radius:10px;padding:13px 15px;font-size:13px;white-space:pre-wrap;margin:0 0 10px;color:#14181d;font-family:'IBM Plex Mono',monospace;}
 .e-edit{color:#2e6fc0;}
 .e-reset{color:#c33a32;}
@@ -96,7 +101,10 @@ input[type=date]{padding:10px;background:#fff;color:#2c333b;border:1px solid #d7
 </div>
 <div class="foot">
 <div id="summary" style="font-size:13px;">0 selected · Rs. 0</div>
+<div class="btns">
+<button type="button" class="stop" id="stopbtn" onclick="stopBills()" disabled>STOP</button>
 <button type="button" class="send" id="sendbtn" onclick="makeBills()" disabled>Make Bills</button>
+</div>
 </div>
 <script>
 const SB_URL = 'https://mzzieomklvphwfwyiqjn.supabase.co';
@@ -109,6 +117,7 @@ let filter = 'all';
 let day = 'today';
 let openItems = null;   // id whose item lines are expanded
 let busy = false;
+let stopPending = false;  // STOP pressed, PC has not acted on it yet
 
 function ymd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
@@ -148,10 +157,73 @@ async function load(){
     orders = rows;
     // drop ticks for orders that are no longer on screen
     picked = new Set([...picked].filter(id => rows.some(o => o.id === id)));
+    await readStop();
     render();
   }catch(e){
     document.getElementById('status').textContent = 'could not load — ' + e.message;
   }
+}
+
+// ---- STOP ---------------------------------------------------------
+//
+// Asked for on 16-09-2026. Ten orders are tapped, a mistake is spotted,
+// and until now there was nothing to do but watch all ten go through.
+//
+// This does NOT reach into the PC. It writes one row --
+// debug_status['bill_maker_stop'] = {stop:true} -- and bill_maker.py
+// reads it BETWEEN one bill and the next. That is deliberate: stopping
+// halfway through a bill would leave Sale Entry sitting there with a
+// party in it and half its lines changed. So the bill on the screen is
+// finished, and everything that has not been started goes back on the
+// picking list.
+//
+// The PC clears the flag when it has acted, and the button goes from
+// "stopping…" back to "STOP" -- so the page never lies about whether
+// anything actually happened.
+function queuedCount(){
+  return orders.filter(o => o.status === 'billed'
+                            && o.fas_entry_started !== true).length;
+}
+
+async function readStop(){
+  try{
+    const r = await fetch(
+      `${SB_URL}/rest/v1/debug_status?key=eq.bill_maker_stop&select=value`,
+      {headers: H});
+    if (!r.ok) return;
+    const rows = await r.json();
+    const v = (rows && rows[0] && rows[0].value) || {};
+    const was = stopPending;
+    stopPending = v.stop === true;
+    if (was && !stopPending){
+      note('Stopped. ' + (v.note || 'The PC has stopped making bills.'), true);
+    }
+  }catch(e){ /* the page keeps working without it */ }
+}
+
+async function stopBills(){
+  if (stopPending) return;
+  const n = queuedCount();
+  const msg = n
+    ? `Stop making bills?\n\n${n} order(s) are waiting.\nThe bill the PC is on right now is finished first — the rest go back on the picking list.`
+    : 'Stop making bills?';
+  if (!confirm(msg)) return;
+  try{
+    const r = await fetch(`${SB_URL}/rest/v1/debug_status`, {
+      method: 'POST',
+      headers: {...H, 'Content-Type': 'application/json',
+                Prefer: 'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify({key: 'bill_maker_stop',
+                            value: {stop: true, at: new Date().toISOString()}})
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    stopPending = true;
+    note('STOP sent. The bill being made right now is finished first, then '
+       + 'the rest go back on the picking list.', true);
+  }catch(e){
+    note('Could not send STOP — ' + e.message, false);
+  }
+  summary();
 }
 
 function pickDay(which){
@@ -232,9 +304,17 @@ function showItems(ev, id){
 function summary(){
   let sum = 0;
   for (const o of orders) if (picked.has(o.id)) sum += total(o);
+  const waiting = queuedCount();
   document.getElementById('summary').textContent =
-    `${picked.size} selected · Rs. ${money(sum)}`;
+    `${picked.size} selected · Rs. ${money(sum)}`
+    + (waiting ? ` · ${waiting} being made` : '');
   document.getElementById('sendbtn').disabled = busy || picked.size === 0;
+  const sb = document.getElementById('stopbtn');
+  if (sb){
+    sb.disabled = !stopPending && waiting === 0;
+    sb.textContent = stopPending ? 'stopping…' : 'STOP';
+    sb.classList.toggle('waiting', stopPending);
+  }
 }
 
 function render(){
