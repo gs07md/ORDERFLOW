@@ -41,7 +41,7 @@
   .brand-name{ font-size:15.5px; font-weight:600; letter-spacing:.2px; color:#FFFFFF; }
   .brand-sub{ font-size:11.5px; color:rgba(255,255,255,.62); margin-top:1px; }
 
-  /* ---- Which day are we looking at (same idea as Bill Maker) ---- */
+  /* ---- which day are we looking at (ported from the PC's date-bar) ---- */
   .datebar{ display:flex; gap:7px; margin-top:11px; align-items:center; }
   .datebar .db{
     flex:1; min-width:0; padding:8px 6px; font-size:12.5px; font-weight:600;
@@ -132,12 +132,109 @@
     color:var(--ok); background:#fff; border:1px solid #B9DFC4; border-radius:999px;
     padding:3px 10px; margin-top:6px; }
 
+  /* ---- dispatcher item table (16-09-2026) ----
+     The dispatcher was reading the same four-box card the picker fills
+     in, one card per item, which on a twenty-line order is a lot of
+     scrolling to answer one question: what is different? A table answers
+     that in one look. */
+  .dwrap{ overflow-x:auto; -webkit-overflow-scrolling:touch;
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-panel); }
+  .dtable{ width:100%; border-collapse:collapse; table-layout:fixed; }
+  .dtable col.q, .dtable col.r{ width:74px; }
+  .cdline{ display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
+  .ordline{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+  .ordline b{ color:var(--text); font-family:var(--mono); }
+  .dtable th{ font-size:10px; letter-spacing:.4px; text-transform:uppercase;
+    color:var(--text-dim); font-weight:700; text-align:left; padding:8px 7px;
+    background:var(--bg-raised); border-bottom:1px solid var(--line); white-space:nowrap; }
+  .dtable th.n{ text-align:right; }
+  .dtable td{ padding:8px 7px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }
+  .dtable tr:last-child td{ border-bottom:none; }
+  .dtable td.n{ text-align:right; font-family:var(--mono); white-space:nowrap; }
+  .dtable .cd{ font-family:var(--mono); font-weight:800; color:var(--accent); font-size:13px; }
+  .dtable .ds{ font-size:11.5px; color:var(--text-dim); line-height:1.3; margin-top:1px; }
+  .dtable .lc{ font-size:11px; color:var(--text-dim); font-family:var(--mono);
+    white-space:nowrap; margin-top:2px; }
+  .dtable input{ width:100%; min-width:54px; box-sizing:border-box; padding:7px 6px;
+    border:1px solid var(--line); border-radius:7px; background:var(--bg-raised);
+    font-family:var(--mono); font-size:14px; text-align:right; color:var(--text); }
+  .dtable input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  .dtable input:disabled{ opacity:.45; }
+
+  /* THE COLOURS EACH MEAN ONE THING, AND ONLY ONE.
+       yellow  = the RATE is not the stock rate
+       red bar = the QUANTITY is not what was ordered
+       red row = the item was not supplied at all (qty 0)
+       green   = a bill in Value-FAS has already taken it
+     Two can be true at once, so they are separate marks rather than one
+     colour that has to mean several things. */
+  .dtable tr.rate-diff{ background:var(--wait-bg); }
+  .dtable tr.qty-diff td:first-child{ box-shadow: inset 3px 0 0 var(--bad); }
+  .dtable tr.gone{ background:var(--bad-bg); }
+  .dtable tr.gone .cd, .dtable tr.gone .ds{ text-decoration:line-through; opacity:.55; }
+  .dtable tr.billed-row{ background:var(--ok-bg); }
+  .dtable .who{ font-size:10.5px; color:var(--text-dim); margin-top:3px; line-height:1.3; }
+  .dtable .who b{ color:var(--text); font-weight:800; }
+
+  .delbtn{ border:1px solid var(--line); background:var(--bg-panel); color:var(--bad);
+    border-radius:7px; padding:6px 10px; font-size:11.5px; font-weight:800; cursor:pointer;
+    line-height:1.2; white-space:nowrap; margin-top:7px; }
+  .delbtn:active{ background:var(--bad-bg); }
+  .delbtn.undo{ color:var(--text-dim); }
+  .delbtn:disabled{ opacity:.3; }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:6px 12px; font-size:11px; color:var(--text-dim);
+    margin:9px 2px 10px; align-items:center; }
+  .legend i{ width:11px; height:11px; border-radius:3px; display:inline-block;
+    margin-right:4px; vertical-align:-1px; border:1px solid rgba(0,0,0,.10); }
+
+  /* one pair of marks, used on every screen, same colours everywhere */
+  .mk{ font-weight:800; font-size:13.5px; }
+  .mk.yes{ color:var(--ok); }
+  .mk.no{ color:var(--bad); }
+
+  /* ---- who this order is given to ---- */
+  .assign{ display:flex; align-items:center; gap:6px; margin-top:7px; flex-wrap:wrap; }
+  .assign label{ font-size:11px; color:var(--text-dim); }
+  .assign select{ font-size:12px; padding:5px 7px; border:1px solid var(--line);
+    border-radius:7px; background:var(--bg-panel); color:var(--text); max-width:160px; }
+  .who-chip{ display:inline-block; font-size:11px; font-weight:800; color:var(--accent);
+    background:var(--accent-dim); border-radius:999px; padding:2px 9px; }
+  .who-chip.none{ color:var(--text-dim); background:var(--bg-raised); }
+  .who-chip.done{ color:var(--ok); background:var(--ok-bg); }
+
+  /* ---- one order, more than one pair of hands ---- */
+  .split-list{ display:flex; flex-direction:column; gap:8px; margin:8px 0 14px; }
+  .split-row{ display:flex; align-items:center; gap:10px; padding:10px 12px;
+    border:1px solid var(--line); border-radius:10px; background:var(--bg-raised); }
+  .split-row input[type=checkbox]{ width:20px; height:20px; flex:none; }
+  .split-row .nm{ font-weight:700; flex:1; }
+  .split-row .cnt{ font-family:var(--mono); font-size:12px; color:var(--text-dim); }
+  .split-preview{ font-size:12.5px; color:var(--text-dim); margin-bottom:12px; line-height:1.5; }
+  .split-preview b{ color:var(--text); }
+  .prog{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800;
+    border-radius:999px; padding:2px 9px 2px 7px; color:var(--accent); background:var(--accent-dim); }
+  .prog.full{ color:var(--ok); background:var(--ok-bg); }
+  .prog i{ width:34px; height:5px; border-radius:3px; background:rgba(0,0,0,.10); position:relative; display:inline-block; }
+  .prog i b{ position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:currentColor; }
+  .own{ display:inline-block; font-size:10px; font-weight:800; color:var(--accent);
+    background:var(--accent-dim); border-radius:999px; padding:1px 7px; margin-left:5px; vertical-align:1px; }
+  .btn-split{ margin-top:0; padding:6px 10px; font-size:12px; border:1px solid var(--line);
+    border-radius:7px; background:var(--bg-panel); color:var(--accent); font-weight:800; cursor:pointer; }
+
+  .toast{ position:fixed; left:50%; bottom:78px; transform:translateX(-50%);
+    background:var(--navy); color:#fff; font-size:13px; padding:10px 16px;
+    border-radius:999px; z-index:60; box-shadow:0 6px 20px rgba(16,24,40,.28);
+    max-width:88%; text-align:center; }
+
   /* ---- recheck table ---- */
   .recheck-row{
     display:grid; grid-template-columns: 1fr auto auto; gap:8px; align-items:center;
     padding:10px 12px; border-bottom:1px solid var(--line); font-size:13.5px;
   }
   .recheck-row.mismatch{ background:var(--bad-bg); }
+  .recheck-row.rate-diff{ background:var(--wait-bg); }
+  .recheck-row .who{ font-size:10.5px; color:var(--text-dim); margin-top:2px; }
   .recheck-row .desc{ line-height:1.3; }
   .recheck-row .code{ font-family:var(--mono); font-size:11px; color:var(--text-dim); }
   .recheck-row .colhead{ font-size:10.5px; color:var(--text-dim); text-align:right; }
@@ -268,7 +365,9 @@ function orderToRow(o){
   return {
     id: o.id, order_no: o.orderNo, party: o.party, ac_code: o.acCode || null,
     location: o.location || null, order_date: o.date, status: o.status,
-    fas_entry_started: !!o.fasEntryStarted, items: o.items
+    fas_entry_started: !!o.fasEntryStarted, items: o.items,
+    // Who this order has been given to for picking. Null = nobody yet.
+    assigned_to: o.assignedTo || null
   };
 }
 function sortOrders(list){
@@ -283,11 +382,52 @@ function sortOrders(list){
   });
 }
 
+// -------- WHICH DAY ARE WE LOOKING AT (ported from the PC copy) --------
+// Bill Maker has had Today / Yesterday / any date from the start.
+// OrderFlow only ever showed today, so a mistake made yesterday could
+// not be checked from the phone: "mare order flow ma pn date vise joi
+// same as bill maker ni jm ke su bhul kri kale teh check kri sakay".
+let viewDay = 'today';        // 'today' | 'yesterday' | 'YYYY-MM-DD'
+
+function localYmd(d){
+  // The PHONE'S OWN date. toISOString is UTC, and India is 5.5h ahead,
+  // so before 5:30am it asked for YESTERDAY and the morning's orders
+  // looked like they had not arrived.
+  return d.getFullYear() + '-' +
+         String(d.getMonth() + 1).padStart(2, '0') + '-' +
+         String(d.getDate()).padStart(2, '0');
+}
+function chosenDate(){
+  if(viewDay === 'today') return localYmd(new Date());
+  if(viewDay === 'yesterday'){
+    const d = new Date(); d.setDate(d.getDate() - 1); return localYmd(d);
+  }
+  return viewDay;
+}
+function viewingToday(){ return chosenDate() === localYmd(new Date()); }
+function prettyDate(ymd){
+  const [y, m, d] = ymd.split('-');
+  return d + '-' + m + '-' + y;
+}
+async function pickDay(which){
+  viewDay = which;
+  currentOrderId = null;      // never leave an old day's order open
+  orders = [];
+  render();
+  await syncNowOnLoad();
+  render();
+}
+function pickCustom(){
+  const el = document.getElementById('ofdate');
+  if(el && el.value) pickDay(el.value);
+}
+
 function rowToOrder(r){
   return {
     id: r.id, orderNo: r.order_no, party: r.party, acCode: r.ac_code,
     location: r.location, date: r.order_date, status: r.status,
-    fasEntryStarted: r.fas_entry_started, items: r.items || []
+    fasEntryStarted: r.fas_entry_started, items: r.items || [],
+    assignedTo: r.assigned_to || null
   };
 }
 
@@ -326,6 +466,26 @@ async function setUser(phone, role, name){
   }catch(e){ console.error('setUser failed', e); }
 }
 
+/* The picker list has to be on the card itself, and a card is drawn
+   synchronously -- so the users are pulled once and kept. Refreshed on
+   every order poll, so somebody added in Manage Users turns up without a
+   reload. */
+let usersCache = [];
+async function preloadUsers(){
+  try{
+    const u = await listUsers();
+    if(Array.isArray(u) && u.length) usersCache = u;
+  }catch(e){}
+  return usersCache;
+}
+function pickersList(){
+  return usersCache.filter(u => u.role === 'picker' || u.role === 'dispatcher');
+}
+function nameOfPhone(phone){
+  const u = usersCache.find(x => String(x.phone) === String(phone));
+  return (u && u.name) ? u.name : phone;
+}
+
 async function listUsers(){
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/users?select=*`, {headers: SB_HEADERS});
@@ -336,61 +496,6 @@ async function listUsers(){
 async function anyUsersExist(){
   const users = await listUsers();
   return users.length > 0;
-}
-
-/* =========================================================================
-   WHICH DAY ARE WE LOOKING AT
-
-   Bill Maker has had Today / Yesterday / any date from the start.
-   OrderFlow only ever showed today, so a mistake made yesterday could
-   not be looked at from the phone at all. Asked for on 15-09-2026:
-   "mare order flow ma pn date vise joi same as bill maker ni jm ke su
-   bhul kri kale teh check kri sakay".
-
-   The choice is NOT remembered between visits, on purpose. The app
-   opens on today every single time, so nobody walks up to a phone
-   somebody left on an old date and starts picking into yesterday.
-   ========================================================================= */
-let viewDay = 'today';        // 'today' | 'yesterday' | 'YYYY-MM-DD'
-
-function localYmd(d){
-  // The PHONE'S OWN date. The old code used
-  // new Date().toISOString().slice(0,10), which is UTC -- and India is
-  // 5.5 hours ahead, so between midnight and 5:30am it asked for
-  // YESTERDAY and the morning's orders looked like they had not
-  // arrived at all.
-  return d.getFullYear() + '-' +
-         String(d.getMonth() + 1).padStart(2, '0') + '-' +
-         String(d.getDate()).padStart(2, '0');
-}
-
-function chosenDate(){
-  if(viewDay === 'today') return localYmd(new Date());
-  if(viewDay === 'yesterday'){
-    const d = new Date(); d.setDate(d.getDate() - 1); return localYmd(d);
-  }
-  return viewDay;                       // an explicit YYYY-MM-DD
-}
-
-function viewingToday(){ return chosenDate() === localYmd(new Date()); }
-
-function prettyDate(ymd){
-  const [y, m, d] = ymd.split('-');
-  return d + '-' + m + '-' + y;
-}
-
-async function pickDay(which){
-  viewDay = which;
-  currentOrderId = null;      // never leave an old day's order open
-  orders = [];
-  render();                   // show the new day's header at once
-  await syncNowOnLoad();
-  render();
-}
-
-function pickCustom(){
-  const el = document.getElementById('ofdate');
-  if(el && el.value) pickDay(el.value);
 }
 
 const DB = {
@@ -421,8 +526,8 @@ async function pullFromSupabase(){
   if(!FIREBASE_CONFIGURED) return null;
   try{
     const day = chosenDate();
-    // Filter by the chosen date server-side -- cheaper and faster than
-    // pulling every historical order and filtering in the browser.
+    // Filter by the chosen day server-side -- cheaper than pulling every
+    // historical order and filtering in the browser.
     const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_date=eq.${day}&select=*`, {headers: SB_HEADERS});
     const rows = await res.json();
     if(!Array.isArray(rows)) return null;
@@ -439,6 +544,7 @@ function startLiveSync(){
     // orders -- so location data is never more stale than the orders
     // themselves. Runs alongside the order pull, not gated behind the
     // old 15-min cache.
+    preloadUsers();
     fetchAllStock().then(fresh => {
       stockCache = fresh;
       try{ localStorage.setItem('orderflow_stock_cache', JSON.stringify({ts: Date.now(), data: fresh})); }catch(e){}
@@ -455,10 +561,9 @@ function startLiveSync(){
     const nextJson = JSON.stringify(newOrders);
     if(nextJson === JSON.stringify(orders)) return;   // nothing changed -- don't repaint
     orders = newOrders;
-    // Only today's list is worth keeping for the next visit. Writing an
-    // old day's orders here would show them for a moment on the next
-    // open, before the first pull lands -- exactly the kind of thing
-    // that gets picked into by mistake.
+    // Only today's list is worth keeping for the next visit; caching an
+    // old day's orders would flash them on next open before the pull
+    // lands -- the kind of thing that gets picked into by mistake.
     if(viewingToday()) localStorage.setItem('orderflow_orders_v2', nextJson);
     if(!currentOrderId) render();
   }, 3000);
@@ -545,13 +650,66 @@ tabbar.addEventListener('click', (e)=>{
   if(!btn) return;
   activeTab = btn.dataset.tab;
   currentOrderId = null;
+  if(activeTab !== 'orders') armBack();
   [...tabbar.children].forEach(b=>b.classList.toggle('active', b===btn));
   render();
+});
+
+/* ONE pair of marks, used on every screen.
+   Before this, ✓/✗ were written inline in three places with three
+   different colours and sizes, so the same mark did not look the same
+   twice. */
+function mark(done){
+  return done ? '<span class="mk yes">&#10003;</span>'
+              : '<span class="mk no">&#10007;</span>';
+}
+
+let _toastT = null;
+function toast(msg){
+  document.querySelector('.toast')?.remove();
+  const d = document.createElement('div');
+  d.className = 'toast';
+  d.textContent = msg;
+  document.body.appendChild(d);
+  clearTimeout(_toastT);
+  _toastT = setTimeout(()=>d.remove(), 2200);
+}
+
+/* -------- the phone's Back button --------
+   Until now Back closed the whole app. On a packing screen that means
+   losing your place mid-order, which is exactly when it is worst. A
+   history entry is kept while anything is open, so Back walks back OUT
+   of it instead of out of the app. At the top of the app it asks once
+   before letting go. */
+let _atTopSince = 0;
+function armBack(){
+  try{ history.pushState({of:1}, ''); }catch(e){}
+}
+function goBack(){
+  if(currentOrderId){ currentOrderId = null; pickerIdx = 0; render(); return true; }
+  if(activeTab !== 'orders'){
+    activeTab = 'orders';
+    [...tabbar.children].forEach(b=>b.classList.toggle('active', b.dataset.tab === 'orders'));
+    render();
+    return true;
+  }
+  return false;
+}
+window.addEventListener('popstate', ()=>{
+  if(goBack()){ armBack(); return; }
+  // Nothing left to go back to. One press warns, a second within three
+  // seconds is allowed through and closes the app.
+  const now = Date.now();
+  if(now - _atTopSince < 3000) return;    // let it go
+  _atTopSince = now;
+  toast('App band karva mate fari Back dabavo');
+  armBack();
 });
 
 function goToOrder(id){
   currentOrderId = id;
   pickerIdx = 0;
+  if(id) armBack();
   render();
 }
 
@@ -881,7 +1039,22 @@ function renderOrderList(){
   }
 
   const isCeo = currentRole === 'ceo';
-  const rows = orders.map(o=>{
+  const canAssign = currentRole === 'ceo' || currentRole === 'dispatcher';
+
+  // A PICKER IS HANDED WORK, NOT THE WHOLE DAY.
+  const mine = (currentRole === 'picker')
+    ? orders.filter(o => (o.items || []).some(it => String(itemOwner(o, it) || '') === String(currentPhone || '')))
+    : orders;
+
+  if(currentRole === 'picker' && mine.length === 0){
+    main.innerHTML = (viewingToday() ? '' :
+        `<div class="oldday"><b>${prettyDate(chosenDate())}</b> nu juo cho.
+           <span style="text-decoration:underline; cursor:pointer;" onclick="pickDay('today')">Aaj par pacha jao</span></div>`)
+      + `<div class="empty">Tamne ${viewingToday() ? '' : prettyDate(chosenDate()) + ' na divase '}koi order apayo nathi.</div>`;
+    return;
+  }
+
+  const rows = mine.map(o=>{
     const total = o.items.length;
     const mismatches = o.items.filter(it => it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)))).length;
     // How many of this order's items a Sale bill in Value-FAS has already
@@ -896,9 +1069,33 @@ function renderOrderList(){
           <div class="no">${o.orderNo}${o.location ? ' · '+o.location : ''}${o.date ? ' · '+o.date : ''}</div>
           <div class="title">${o.party}</div>
           <div class="meta">${total} item${total>1?'s':''}${(!currentRole || currentRole!=='picker') && mismatches ? ' · '+mismatches+' mismatch'+(mismatches>1?'es':'') : ''}</div>
-          ${billedCount ? `<div class="card-billed">✓ ${allBilled
+          ${billedCount ? `<div class="card-billed">&#10003; ${allBilled
               ? 'VALUE-FAS MA BILL BANI GAYU — na kadhso'
               : billedCount + ' / ' + total + ' item bill ma aavi gaya'}</div>` : ''}
+          ${(() => {
+            const who = pickedByNames(o);
+            const bits = [];
+            if(currentRole !== 'picker'){
+              const prog = ownerProgress(o);
+              if(prog.length){
+                // "Raju 12/35 · Suresh 0/35" with a little bar each --
+                // who has this order, and how far each of them is.
+                for(const pr of prog){
+                  const pct = pr.total ? Math.round(100 * pr.done / pr.total) : 0;
+                  bits.push(`<span class="prog ${pr.done === pr.total ? 'full' : ''}">&#128100; ${esc(pr.name)} ${pr.done}/${pr.total}<i><b style="width:${pct}%"></b></i></span>`);
+                }
+              } else if(stillToPick(o)){
+                bits.push(`<span class="who-chip none">koi ne apayo nathi</span>`);
+              }
+            }
+            if(who.length){
+              bits.push(`<span class="who-chip done">&#10003; kadhyu: ${esc(who.join(', '))}</span>`);
+            }
+            return bits.length
+              ? `<div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">${bits.join('')}</div>`
+              : '';
+          })()}
+          ${canAssign ? assignControl(o) : ''}
         </div>
         <div class="right">
           <span class="pill ${statusPillClass(o.status)}">${statusLabel(o.status)}</span>
@@ -909,10 +1106,13 @@ function renderOrderList(){
 
   // A count on screen, so "only a few showing" is obviously a filter or a
   // scroll position -- not the list having failed to load.
+  // Counted over what this person can actually SEE. A picker shown one
+  // card under a chip reading "All (9)" would reasonably think eight
+  // cards had failed to load.
   const statusCounts = {pending:0, checking:0, ready:0, packed:0, billed:0};
-  orders.forEach(o => { if(statusCounts[o.status]!==undefined) statusCounts[o.status]++; });
+  mine.forEach(o => { if(statusCounts[o.status]!==undefined) statusCounts[o.status]++; });
   const filterChips = ['all','pending','checking','ready','packed','billed'].map(s => {
-    const label = s==='all' ? `All (${orders.length})` : `${statusLabel(s)} (${statusCounts[s]||0})`;
+    const label = s==='all' ? `All (${mine.length})` : `${statusLabel(s)} (${statusCounts[s]||0})`;
     return `<button class="status-chip" data-status-filter="${s}" onclick="setOrderStatusFilter('${s}')">${label}</button>`;
   }).join('');
 
@@ -964,6 +1164,199 @@ function generateBatchBills(){
 }
 
 let orderStatusFilter = 'all';
+/* WHO PICKS THIS ORDER.
+   Asked for on 16-09-2026: the picker should not be handed the whole
+   day's work, and the shop wants to know afterwards who pulled what.
+   CEO and dispatcher both set it; the picker only sees what is theirs. */
+function assignOrder(orderId, phone){
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  o.assignedTo = phone || null;
+  for(const it of (o.items || [])){
+    if(!it.done && it.aqty == null && !it.billed) delete it.assignedTo;
+  }
+  DB.save(orders);
+  toast(phone ? (o.orderNo + ' → ' + nameOfPhone(phone)) : (o.orderNo + ' — koi ne nahi'));
+  render();
+}
+
+/* -------- one order, more than one pair of hands --------
+   A 180-line order is a morning for one person. It can be handed to two
+   or three, and THE SPLIT FOLLOWS THE RACKS: the lines are already in
+   walking order (locationSortedIndices), so each picker gets one
+   contiguous stretch of the warehouse instead of the two of them
+   crossing in every aisle. A line already picked stays with whoever
+   picked it -- a re-split never moves finished work.
+
+   Model: `o.assignedTo` is the order's picker, as before. A line may
+   carry its own `it.assignedTo`, which wins. So a single-picker order
+   needs nothing new, and a split order is just lines with owners. */
+function itemOwner(o, it){
+  return it.assignedTo || o.assignedTo || null;
+}
+function ownersOf(o){
+  const seen = [];
+  for(const it of (o.items || [])){
+    const w = itemOwner(o, it);
+    if(w && !seen.includes(w)) seen.push(w);
+  }
+  return seen;
+}
+function isSplit(o){
+  return ownersOf(o).length > 1;
+}
+/* The lines that are THIS person's, in walking order. */
+function myItemIdxs(o, phone){
+  return locationSortedIndices(o).filter(i => String(itemOwner(o, o.items[i])) === String(phone));
+}
+/* "Raju 12/35" for every owner -- what the card shows. */
+function ownerProgress(o){
+  const m = new Map();
+  for(const it of (o.items || [])){
+    const w = itemOwner(o, it);
+    if(!w) continue;
+    const e = m.get(w) || {done:0, total:0};
+    e.total++;
+    if(it.done || it.billed || it.aqty != null) e.done++;
+    m.set(w, e);
+  }
+  return [...m].map(([phone, e]) => ({phone, name: nameOfPhone(phone), ...e}));
+}
+
+function splitOrder(orderId, phones){
+  const o = orders.find(x=>x.id===orderId);
+  if(!o || !phones.length) return;
+  // The whole point is dealing by RACK. Without the stock list there are
+  // no racks, and the deal would quietly fall back to line order -- two
+  // pickers crossing in every aisle, and nobody told. Refuse instead.
+  if(!stockCache || !stockCache.length){
+    toast('Stock list hju load nathi thai — 2 second pachi fari try karo.');
+    return;
+  }
+  // Only lines nobody has finished are dealt out. Finished ones keep
+  // their picker -- the name on them is the whole point.
+  const open = locationSortedIndices(o).filter(i => {
+    const it = o.items[i];
+    return !it.billed && !it.done && it.aqty == null;
+  });
+  const n = phones.length;
+  const per = Math.ceil(open.length / n);
+  open.forEach((idx, k) => {
+    o.items[idx].assignedTo = phones[Math.min(Math.floor(k / per), n - 1)];
+  });
+  o.assignedTo = phones[0];
+  DB.save(orders);
+  const words = ownerProgress(o).map(p => `${p.name} ${p.total}`).join(' · ');
+  toast(o.orderNo + ' vahenchyo: ' + words);
+  closeModal();
+  render();
+}
+
+function closeModal(){ modalRoot.innerHTML = ''; }
+
+async function openSplitSheet(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  if(!stockCache || !stockCache.length){
+    toast('Stock list laavu chu…');
+    await preloadStock();
+  }
+  const open = o.items.filter(it => !it.billed && !it.done && it.aqty == null).length;
+  const owners = ownersOf(o);
+  const people = pickersList();
+  if(people.length < 2){
+    alert('Vahenchva mate ochha ma ocha 2 picker joi ye. Manage Users ma umero.');
+    return;
+  }
+  const rows = people.map(u => `
+    <label class="split-row">
+      <input type="checkbox" value="${esc(u.phone)}" ${owners.includes(String(u.phone)) ? 'checked' : ''}
+        onchange="splitPreview('${o.id}')">
+      <span class="nm">${esc(u.name || u.phone)}</span>
+      <span class="cnt" id="split-cnt-${esc(u.phone)}"></span>
+    </label>`).join('');
+  modalRoot.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal">
+        <h3>${esc(o.orderNo)} — kone kone kadhvanu?</h3>
+        <div class="split-preview" id="split-preview"></div>
+        <div class="split-list" id="split-list">${rows}</div>
+        <button class="btn btn-primary" id="split-go" onclick="splitGo('${o.id}')">Vahencho</button>
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>`;
+  splitPreview(o.id);
+}
+
+function splitChosen(){
+  return [...document.querySelectorAll('#split-list input:checked')].map(i => i.value);
+}
+
+function splitPreview(orderId){
+  const o = orders.find(x=>x.id===orderId);
+  const chosen = splitChosen();
+  const open = o.items.filter(it => !it.billed && !it.done && it.aqty == null).length;
+  const doneN = o.items.length - open;
+  const n = chosen.length;
+  const per = n ? Math.ceil(open / n) : 0;
+  document.querySelectorAll('#split-list .cnt').forEach(el => el.textContent = '');
+  chosen.forEach((ph, k) => {
+    const share = Math.max(0, Math.min(per, open - k * per));
+    const el = document.getElementById('split-cnt-' + ph);
+    if(el) el.textContent = share + ' item';
+  });
+  const pv = document.getElementById('split-preview');
+  const go = document.getElementById('split-go');
+  if(!n){
+    pv.innerHTML = `${open} item baki che. Kone apva te tick karo.`;
+    go.disabled = true;
+  } else {
+    pv.innerHTML = `<b>${open} item</b> ${n} jan ma vahenchase — <b>rack na kram e</b>, etle dar ek ne
+      godown no ek j bhaag male, ek-bija ni aade na aave.`
+      + (doneN ? ` ${doneN} item pehla thi thai gaya che, te jem che tem rahese.` : '');
+    go.disabled = false;
+  }
+}
+
+function splitGo(orderId){
+  const chosen = splitChosen();
+  if(!chosen.length) return;
+  splitOrder(orderId, chosen);
+}
+
+function stillToPick(o){
+  return o.status === 'pending' || o.status === 'checking' || o.status === 'ready';
+}
+
+function assignControl(o){
+  if(!stillToPick(o)) return '';
+  const opts = pickersList().map(u =>
+    `<option value="${esc(u.phone)}" ${String(o.assignedTo)===String(u.phone)?'selected':''}>${esc(u.name || u.phone)}</option>`
+  ).join('');
+  const open = (o.items || []).filter(it => !it.billed && !it.done && it.aqty == null).length;
+  return `
+    <div class="assign" onclick="event.stopPropagation()">
+      <label>Kadhvanu:</label>
+      <select onchange="assignOrder('${o.id}', this.value)">
+        <option value="">— koi ne nahi —</option>
+        ${opts}
+      </select>
+      ${open >= 2 && pickersList().length >= 2
+        ? `<button class="btn-split" onclick="openSplitSheet('${o.id}')">&#8644; ${isSplit(o) ? 'fari vahencho' : '2 jan ma vahencho'}</button>`
+        : ''}
+    </div>`;
+}
+
+/* Every name that has touched this order's lines, so the card answers
+   "aa saman kone kadhyu?" without opening it. */
+function pickedByNames(o){
+  const seen = [];
+  for(const it of (o.items || [])){
+    if(it.pickedBy && !seen.includes(it.pickedBy)) seen.push(it.pickedBy);
+  }
+  return seen;
+}
+
 function setOrderStatusFilter(s){
   orderStatusFilter = s;
   updateStatusChipStyles();
@@ -1048,72 +1441,136 @@ function renderPackingCheck(o){
     return;
   }
 
-  // Full view (CEO/Dispatcher): all items, each with a done/pending badge
-  // and who picked it, so nobody has to guess what's finished. Sorted by
-  // rack location so items are grouped in walking order.
+  // Full view (CEO/Dispatcher): ONE TABLE, not twenty cards.
+  // Sorted by rack location so items are in walking order.
   const sortedIdxs = locationSortedIndices(o);
   const rows = sortedIdxs.map((idx, srNo)=>{
     const it = o.items[idx];
     const aq = it.aqty != null ? it.aqty : '';
-    const ar = it.arate !== null ? it.arate : '';
-    const mismatch = it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
-    const done = it.aqty != null;   // != catches null AND undefined
+    const ar = it.arate != null ? it.arate : '';
+    const done = it.aqty != null;
+    const gone = itemGone(it);
     const stk = stockLookup(it.code);
     return `
-      <div class="item-row ${mismatch?'mismatch':''} ${it.billed?'already-billed':''}" id="row-${idx}" data-search="${(it.code+' '+it.desc).toLowerCase()}">
-        <div class="item-top">
-          <div>
-            <div class="item-code">${srNo+1}. ${it.code} <span style="color:${done?'var(--ok)':'var(--bad)'}; font-weight:700;">${done?'✓':'✗'}</span></div>
-            <div class="item-desc">${it.desc}</div>
-            ${stk ? `<div class="loc-line">📍 ${stk.location || '—'}<span class="loc-stock">STOCK ${stk.qty ?? '—'}</span></div>` : ''}
-            ${it.billed ? `<div class="billed-tag">✓ BILL MA AAVI GAYU — fari na kadho</div>` : ''}
-            ${done && it.pickedBy ? `<div class="fab-note" style="margin:2px 0 0; text-align:left;">Kadhyu: ${it.pickedBy}</div>` : ''}
-          </div>
-        </div>
-        <div class="item-grid">
-          <div class="field">
-            <label>ORDERED QTY</label>
-            <div class="readonly">${it.oqty}</div>
-          </div>
-          <div class="field">
-            <label>MRP</label>
-            <div class="readonly">${fmt(mrpOf(it))}</div>
-          </div>
-          <div class="field">
-            <label>ACTUAL QTY</label>
-            <input inputmode="decimal" placeholder="${it.oqty}" value="${aq}" oninput="updateItem('${o.id}', ${idx}, 'aqty', this.value)">
-          </div>
-          <div class="field">
-            <label>ACTUAL RATE</label>
-            <input inputmode="decimal" placeholder="${mrpOf(it)}" value="${ar}" oninput="updateItem('${o.id}', ${idx}, 'arate', this.value)">
-          </div>
-        </div>
-        <div class="mismatch-tag ${mismatch ? '' : 'hidden'}" id="tag-${idx}">⚠ Ordered thi alag che — check karo</div>
-      </div>`;
+      <tr class="${rowClassFor(o, idx)}" id="row-${idx}"
+          data-search="${esc((it.code+' '+(it.desc||'')).toLowerCase())}">
+        <td>
+          <div class="cd">${srNo+1}. ${esc(it.code)} ${mark(done)}${isSplit(o) && itemOwner(o, it) ? `<span class="own">${esc(nameOfPhone(itemOwner(o, it)))}</span>` : ''}</div>
+          <div class="ds">${esc(it.desc || '')}</div>
+          <div class="lc">&#128205; ${stk ? esc(stk.location || '—') : '—'} &middot; STOCK ${stk ? (stk.qty ?? '—') : '—'}</div>
+          <div class="ordline">Ordered <b>${it.oqty}</b> &middot; MRP <b>${fmt(mrpOf(it))}</b></div>
+          ${it.billed
+            ? `<div class="who" style="color:var(--ok)"><b>&#10003; BILL MA AAVI GAYU</b> — fari na kadho</div>` : ''}
+          ${gone
+            ? `<div class="who" style="color:var(--bad)"><b>KADHYU NATHI</b>${it.pickedBy ? ' — ' + esc(it.pickedBy) : ''}</div>`
+            : (done && it.pickedBy
+               ? `<div class="who">Kadhyu: <b>${esc(it.pickedBy)}</b></div>` : '')}
+          ${it.billed ? ''
+            : gone
+              ? `<button class="delbtn undo" onclick="undoDeleteItem('${o.id}', ${idx})">&#8617; pachhu lavo</button>`
+              : `<button class="delbtn" onclick="deleteItem('${o.id}', ${idx})">&#10007; nathi aapyu</button>`}
+        </td>
+        <td><input inputmode="decimal" placeholder="${it.oqty}" value="${aq}" ${it.billed?'disabled':''}
+              oninput="updateItem('${o.id}', ${idx}, 'aqty', this.value)"></td>
+        <td><input inputmode="decimal" placeholder="${mrpOf(it)}" value="${ar}" ${it.billed?'disabled':''}
+              oninput="updateItem('${o.id}', ${idx}, 'arate', this.value)"></td>
+      </tr>`;
   }).join('');
 
+  const billedN = o.items.filter(it=>it.billed).length;
   main.innerHTML = `
-    <div class="field" style="margin-bottom:12px;">
+    <div class="field" style="margin-bottom:10px;">
       <input id="item-search" placeholder="Item code ya naam search karo..." oninput="filterItemRows()"
         style="width:100%; padding:11px; border:1px solid var(--line); border-radius:8px; font-size:15px;">
     </div>
-    ${o.items.filter(it=>it.billed).length ? `<div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ ${o.items.filter(it=>it.billed).length} item nu bill pehla thi bani gayu che — e lila ma che, fari na kadhso.</div>` : ''}
-    <div class="status-banner">Har item ni Actual Qty ane Actual Rate bharo. Khali rakhso to Ordered value j use thashe. Farak hoy to row lal thai jashe. ✓/✗ batave che picker e kaam puru karyu ke nahi.</div>
-    <div id="item-rows-container">${rows}</div>
-    <button class="btn btn-primary" onclick="finishPacking('${o.id}')">Packing Done → Recheck</button>
+    ${billedN ? `<div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">&#10003; ${billedN} item nu bill pehla thi bani gayu che — e lila ma che, fari na kadhso.</div>` : ''}
+    <div class="legend">
+      <span><i style="background:var(--wait-bg)"></i>Rate alag</span>
+      <span><i style="background:#fff; box-shadow:inset 3px 0 0 var(--bad)"></i>Qty alag</span>
+      <span><i style="background:var(--bad-bg)"></i>Kadhyu nathi</span>
+      <span><i style="background:var(--ok-bg)"></i>Bill ma aavi gayu</span>
+      <span>${mark(true)} thai gayu &middot; ${mark(false)} baki</span>
+    </div>
+    <div class="dwrap">
+      <table class="dtable">
+        <colgroup><col><col class="q"><col class="r"></colgroup>
+        <thead><tr>
+          <th>Item &middot; ordered &middot; MRP</th>
+          <th class="n">Qty</th><th class="n">Rate</th>
+        </tr></thead>
+        <tbody id="item-rows-container">${rows}</tbody>
+      </table>
+    </div>
+    <button class="btn btn-primary" style="margin-top:14px;" onclick="finishPacking('${o.id}')">Packing Done &rarr; Recheck</button>
   `;
+}
+
+/* An item the shop did not supply. The phone writes qty 0 and Bill Maker
+   does NOT put such a line on the bill -- it unticks it in Value-FAS's
+   own popup, so the line stays a PENDING ORDER there and can still be
+   billed when stock comes in. Deleting it off the phone entirely would
+   lose that. */
+function itemGone(it){
+  return !!it.removed || (it.aqty != null && Number(it.aqty) === 0);
+}
+
+function rowClassFor(o, idx){
+  const it = o.items[idx];
+  const done = it.aqty != null;
+  const gone = itemGone(it);
+  return [
+    it.billed ? 'billed-row' : '',
+    gone ? 'gone' : '',
+    (done && !gone && Number(it.arate) !== Number(mrpOf(it))) ? 'rate-diff' : '',
+    (done && !gone && Number(it.aqty)  !== Number(it.oqty))   ? 'qty-diff'  : ''
+  ].filter(Boolean).join(' ');
+}
+
+function whoAmI(){
+  return currentName || currentPhone || 'Koi';
+}
+
+function deleteItem(orderId, idx){
+  const o = orders.find(x=>x.id===orderId);
+  const it = o.items[idx];
+  if(it.billed){
+    alert('Aa item nu bill pehla thi bani gayu che — have kadhi na shakay.');
+    return;
+  }
+  if(!confirm(it.code + '\n\nAa item nathi aapyu? Qty 0 thai jase ane bill par nahi aave.')) return;
+  it.aqty = 0;
+  if(it.arate == null) it.arate = mrpOf(it);
+  it.done = true;
+  it.removed = true;
+  it.pickedBy = whoAmI();
+  if(o.status === 'pending') o.status = 'checking';
+  DB.save(orders);
+  toast(it.code + ' — kadhyu nathi (qty 0)');
+  render();
+}
+
+function undoDeleteItem(orderId, idx){
+  const o = orders.find(x=>x.id===orderId);
+  const it = o.items[idx];
+  it.removed = false;
+  it.aqty = null;
+  it.done = false;
+  DB.save(orders);
+  render();
 }
 
 function filterItemRows(){
   const q = (document.getElementById('item-search')?.value || '').trim().toLowerCase();
-  const rows = document.querySelectorAll('#item-rows-container .item-row');
+  const rows = document.querySelectorAll('#item-rows-container tr[data-search]');
   rows.forEach(r => {
     r.style.display = (!q || r.dataset.search.includes(q)) ? '' : 'none';
   });
 }
 
 function renderPickerSingleItem(o){
-  const sortedIdxs = locationSortedIndices(o);
+  // Only this picker's lines. On a split order that is their stretch of
+  // the racks; on an ordinary one it is everything.
+  const sortedIdxs = isSplit(o) ? myItemIdxs(o, currentPhone) : locationSortedIndices(o);
   // clamp to first not-done item (in location order) so a picker never re-does a finished one
   // Skip anything already done AND anything a bill has already taken --
   // those goods are out of the shop, picking them again is the mistake
@@ -1122,8 +1579,19 @@ function renderPickerSingleItem(o){
         (o.items[sortedIdxs[pickerIdx]].done || o.items[sortedIdxs[pickerIdx]].billed)) pickerIdx++;
 
   if(pickerIdx >= sortedIdxs.length){
-    // everything done -- submit and hand off to dispatcher
-    main.innerHTML = `<div class="empty">✓ Badha item puru thai gaya. Submit thai rahyu che...</div>`;
+    // This picker is done. The ORDER is done only when every line is --
+    // on a split order the other picker may still be out on the racks.
+    const othersOpen = o.items.filter(it => !it.done && !it.billed && it.aqty == null
+                                      && String(itemOwner(o, it)) !== String(currentPhone)).length;
+    if(othersOpen){
+      const who = ownerProgress(o).filter(p => String(p.phone) !== String(currentPhone) && p.done < p.total)
+                    .map(p => `${p.name} (${p.total - p.done} baki)`).join(', ');
+      main.innerHTML = `<div class="empty">&#10003; Tamara ${sortedIdxs.length} item thai gaya.<br><br>
+        Hju ${othersOpen} item bija pase che: ${esc(who)}.<br>Te puru thase etle order aagal jase.</div>`;
+      if(o.status === 'pending'){ o.status = 'checking'; DB.save(orders); }
+      return;
+    }
+    main.innerHTML = `<div class="empty">&#10003; Badha item puru thai gaya. Submit thai rahyu che...</div>`;
     finishPacking(o.id);
     return;
   }
@@ -1133,7 +1601,7 @@ function renderPickerSingleItem(o){
   const total = sortedIdxs.length;
   const stk = stockLookup(it.code);
   main.innerHTML = `
-    <div class="status-banner">Item ${pickerIdx+1} of ${total} — Ordered Qty joi ne Actual Qty/Rate bharo.</div>
+    <div class="status-banner">Item ${pickerIdx+1} of ${total}${isSplit(o) ? ' (tamara)' : ''} — Ordered Qty joi ne Actual Qty/Rate bharo.</div>
     <div class="item-row" id="row-${realIdx}">
       <div class="item-top">
         <div>
@@ -1161,8 +1629,27 @@ function renderPickerSingleItem(o){
         </div>
       </div>
     </div>
-    <button class="btn btn-primary" onclick="confirmPickerItem('${o.id}', ${realIdx})">✓ Aa Item Thai Gayu — Next</button>
+    <button class="btn btn-primary" onclick="confirmPickerItem('${o.id}', ${realIdx})">&#10003; Aa Item Thai Gayu — Next</button>
+    <button class="btn" style="margin-top:9px; color:var(--bad); border-color:#F3B9B6; background:var(--bad-bg);"
+      onclick="pickerSkipItem('${o.id}', ${realIdx})">&#10007; Aa item nathi aapyu — 0 karo</button>
+    <div class="fab-note">0 karso toh aa line bill par nahi aave, ane Value-FAS ma
+      pending order tarike ubhi rahese — stock aave tyare bill thai shakse.</div>
   `;
+}
+
+function pickerSkipItem(orderId, idx){
+  const o = orders.find(x=>x.id===orderId);
+  const it = o.items[idx];
+  if(!confirm(it.code + '\n\nAa item nathi aapyu? Qty 0 thai jase.')) return;
+  it.aqty = 0;
+  it.arate = mrpOf(it);
+  it.done = true;
+  it.removed = true;
+  it.pickedBy = whoAmI();
+  if(o.status === 'pending') o.status = 'checking';
+  DB.save(orders);
+  pickerIdx++;
+  render();
 }
 
 function confirmPickerItem(orderId, idx){
@@ -1173,7 +1660,8 @@ function confirmPickerItem(orderId, idx){
   it.aqty = qtyVal === '' ? it.oqty : Number(qtyVal);
   it.arate = rateVal === '' ? mrpOf(it) : Number(rateVal);
   it.done = true;
-  it.pickedBy = currentName || currentPhone || 'Picker';
+  it.removed = Number(it.aqty) === 0;
+  it.pickedBy = whoAmI();
   if(o.status === 'pending') o.status = 'checking';
   DB.save(orders);
   pickerIdx++;
@@ -1182,15 +1670,24 @@ function confirmPickerItem(orderId, idx){
 
 function updateItem(orderId, idx, field, value){
   const o = orders.find(x=>x.id===orderId);
-  o.items[idx][field] = value === '' ? null : Number(value);
+  const it = o.items[idx];
+  it[field] = value === '' ? null : Number(value);
+  // WHO TOUCHED THIS LINE. The picker's screen already recorded it; the
+  // dispatcher's did not, so a line changed here used to have no name
+  // against it at all.
+  if(it.aqty != null){
+    it.done = true;
+    it.pickedBy = whoAmI();
+    if(Number(it.aqty) !== 0) it.removed = false;
+  } else {
+    it.done = false;
+  }
   if(o.status === 'pending') o.status = 'checking';
   DB.save(orders);
-  const it = o.items[idx];
-  const mismatch = it.aqty != null && (Number(it.aqty)!==Number(it.oqty) || Number(it.arate)!==Number(mrpOf(it)));
+  // Repaint the row's colours in place -- NOT a re-render, which would
+  // take the keyboard away mid-number.
   const rowEl = document.getElementById(`row-${idx}`);
-  const tagEl = document.getElementById(`tag-${idx}`);
-  if(rowEl) rowEl.classList.toggle('mismatch', mismatch);
-  if(tagEl) tagEl.classList.toggle('hidden', !mismatch);
+  if(rowEl) rowEl.className = rowClassFor(o, idx);
 }
 
 function finishPacking(orderId){
@@ -1209,10 +1706,16 @@ function renderRecheck(o){
   const rows = o.items.map(it=>{
     const qtyMismatch = it.aqty != null && Number(it.aqty) !== Number(it.oqty);
     const rateMismatch = it.arate != null && Number(it.arate) !== Number(mrpOf(it));
-    const mismatch = qtyMismatch || rateMismatch;
+    const gone = itemGone(it);
+    // Same rule as the dispatcher's table: yellow means the RATE is not
+    // the stock rate, red means the QUANTITY is not what was ordered.
+    const cls = gone ? 'mismatch' : (qtyMismatch ? 'mismatch' : (rateMismatch ? 'rate-diff' : ''));
     return `
-      <div class="recheck-row ${mismatch?'mismatch':''}">
-        <div class="desc">${it.desc}<div class="code">${it.code}</div></div>
+      <div class="recheck-row ${cls}">
+        <div class="desc">${esc(it.desc || '')}<div class="code">${esc(it.code)}</div>
+          ${gone ? `<div class="who" style="color:var(--bad); font-weight:700;">&#10007; KADHYU NATHI</div>` : ''}
+          ${it.pickedBy ? `<div class="who">Kadhyu: <b>${esc(it.pickedBy)}</b></div>` : ''}
+        </div>
         <div>
           <div class="colhead">QTY</div>
           <div class="num ${qtyMismatch?'diff':''}">${it.oqty} → ${it.aqty}</div>
@@ -1224,13 +1727,23 @@ function renderRecheck(o){
       </div>`;
   }).join('');
 
-  const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(mrpOf(it)), 0);
+  // A line nobody supplied is not going on the bill, so it is not in the
+  // total either -- it used to be counted at its ORDERED quantity. And
+  // the rate used is the one that will be billed, not always the MRP.
+  const total = o.items.reduce((s,it)=> itemGone(it) ? s
+      : s + Number(it.aqty ?? it.oqty ?? 0) * Number(it.arate ?? mrpOf(it)), 0);
   const mismatchCount = o.items.filter(it=>
     (it.aqty != null && Number(it.aqty)!==Number(it.oqty)) ||
     (it.arate != null && Number(it.arate)!==Number(mrpOf(it)))).length;
 
   main.innerHTML = `
-    <div class="status-banner">${mismatchCount ? '⚠ '+mismatchCount+' item ma Ordered ane Actual alag che — bill banavta pehla ek var joi levu.' : '✓ Badha item Ordered mujab j che.'}</div>
+    <div class="status-banner">${mismatchCount ? '&#9888; '+mismatchCount+' item ma Ordered ane Actual alag che — bill banavta pehla ek var joi levu.' : '&#10003; Badha item Ordered mujab j che.'}</div>
+    ${(() => { const g = o.items.filter(itemGone).length; return g
+        ? `<div class="status-banner" style="background:var(--bad-bg); border-color:#F3B9B6; color:var(--bad);">&#10007; ${g} item kadhyu nathi — te bill par nahi aave, ane Value-FAS ma pending rahese.</div>` : ''; })()}
+    <div class="legend">
+      <span><i style="background:var(--wait-bg)"></i>Rate alag</span>
+      <span><i style="background:var(--bad-bg)"></i>Qty alag / kadhyu nathi</span>
+    </div>
     ${rows}
     <div class="summary-card">
       <div class="summary-line total"><span>Final Bill Amount</span><span class="val">₹ ${fmt(total)}</span></div>
@@ -1266,12 +1779,19 @@ function confirmBill(orderId){
 
 function renderFinalBill(o){
   const rows = o.items.map(it=>`
-    <div class="recheck-row">
-      <div class="desc">${it.desc}<div class="code">${it.code}</div></div>
+    <div class="recheck-row ${itemGone(it)?'mismatch':''}">
+      <div class="desc">${esc(it.desc || '')}<div class="code">${esc(it.code)}</div>
+        ${itemGone(it) ? `<div class="who" style="color:var(--bad); font-weight:700;">&#10007; KADHYU NATHI</div>` : ''}
+        ${it.pickedBy ? `<div class="who">Kadhyu: <b>${esc(it.pickedBy)}</b></div>` : ''}
+      </div>
       <div><div class="colhead">QTY</div><div class="num">${it.aqty}</div></div>
-      <div><div class="colhead">AMOUNT</div><div class="num">${fmt((it.aqty ?? it.oqty ?? 0)*mrpOf(it))}</div></div>
+      <div><div class="colhead">AMOUNT</div><div class="num">${itemGone(it) ? '—' : fmt((it.aqty ?? it.oqty ?? 0)*Number(it.arate ?? mrpOf(it)))}</div></div>
     </div>`).join('');
-  const total = o.items.reduce((s,it)=>s + Number(it.aqty ?? it.oqty ?? 0)*Number(mrpOf(it)), 0);
+  // A line nobody supplied is not going on the bill, so it is not in the
+  // total either -- it used to be counted at its ORDERED quantity. And
+  // the rate used is the one that will be billed, not always the MRP.
+  const total = o.items.reduce((s,it)=> itemGone(it) ? s
+      : s + Number(it.aqty ?? it.oqty ?? 0) * Number(it.arate ?? mrpOf(it)), 0);
 
   main.innerHTML = `
     <div class="status-banner" style="background:var(--ok-bg); border-color:#B9DFC4; color:var(--ok);">✓ Bill Maker ma mokli didhu. Bill tya thi select karsho tyare j banse.</div>
@@ -1302,7 +1822,7 @@ async function syncNowOnLoad(){
   const remote = await pullFromSupabase();
   if(remote === null) return;
   orders = sortOrders(remote);
-  if(viewingToday()) localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
+  localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
   if(!currentOrderId) render();
 }
 
@@ -1363,7 +1883,11 @@ async function preloadStock(){
 render();
 syncNowOnLoad();
 preloadStock();
+preloadUsers().then(()=>{ if(currentRole) render(); });
 startLiveSync();
+// One history entry to sit on, so the very first Back press has
+// something to pop instead of closing the app.
+armBack();
 </script>
 </body>
 </html>
