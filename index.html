@@ -510,15 +510,42 @@ const DB = {
   }
 };
 
+/* PUSH ONLY WHAT CHANGED.
+   17-09-2026: "tanuj ne kam apu toh te nikli jay che". Every save used
+   to push ALL twenty orders, one after another, taking 5-6 seconds. The
+   3-second poll ran in the middle and put Supabase's OLD copy back in
+   the list -- assignment gone from the screen -- and the next save then
+   pushed that old copy over the new one. The picker was given the order
+   and lost it again within seconds.
+
+   Now: a snapshot of each order as last seen FROM Supabase is kept, and a
+   save pushes only orders that differ from it. An untouched order is
+   never re-sent, so one phone can no longer overwrite another phone's
+   work with a stale copy. Orders mid-push are marked pending and the
+   poll leaves those alone until the push has landed. */
+const _remoteSnap = {};          // id -> JSON of the row as Supabase last had it
+const _pending = new Set();      // ids with a push in flight
+function _snapOf(o){ return JSON.stringify(orderToRow(o)); }
+function noteRemote(list){
+  for(const o of list){
+    if(!_pending.has(o.id)) _remoteSnap[o.id] = _snapOf(o);
+  }
+}
 async function pushAllToSupabase(orders){
   for(const order of orders){
+    const json = _snapOf(order);
+    if(_remoteSnap[order.id] === json) continue;      // Supabase already has this
+    _pending.add(order.id);
     try{
-      await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
         method: 'POST',
         headers: {...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates'},
-        body: JSON.stringify(orderToRow(order))
+        body: json
       });
+      if(res.ok) _remoteSnap[order.id] = json;
+      else console.error('supabase push rejected', order.id, res.status);
     }catch(e){ console.error('supabase push failed', order.id, e); }
+    finally{ _pending.delete(order.id); }
   }
 }
 
@@ -555,9 +582,13 @@ function startLiveSync(){
     // actually take effect on every phone) -- except the ONE order the
     // person currently has open, which is kept local so a background
     // poll never clobbers input they're actively typing.
-    const newOrders = sortOrders(remote.map(r => (r.id === currentOrderId
+    // Keep the local copy for the order that is open, AND for any order
+    // whose push has not landed yet -- otherwise the poll shows the
+    // old value for a moment and a following save sends it back.
+    const newOrders = sortOrders(remote.map(r => ((r.id === currentOrderId || _pending.has(r.id))
       ? (orders.find(o => o.id === r.id) || r)
       : r)));
+    noteRemote(remote);
     const nextJson = JSON.stringify(newOrders);
     if(nextJson === JSON.stringify(orders)) return;   // nothing changed -- don't repaint
     orders = newOrders;
@@ -1822,6 +1853,7 @@ async function syncNowOnLoad(){
   const remote = await pullFromSupabase();
   if(remote === null) return;
   orders = sortOrders(remote);
+  noteRemote(remote);
   localStorage.setItem('orderflow_orders_v2', JSON.stringify(orders));
   if(!currentOrderId) render();
 }
