@@ -1,8 +1,10 @@
-name: Build APK
+name: Build To Do List APK
 on:
   push:
-    branches: [main]
+    branches: [todo-android]
   workflow_dispatch: {}
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,11 +20,27 @@ jobs:
       - run: npm ci
       - run: npx cap sync android
       - name: Build signed APK
+        id: build
         working-directory: android
-        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon --stacktrace
-      - name: Rename
-        run: cp android/app/build/outputs/apk/release/app-release.apk ToDoList.apk
-      - uses: actions/upload-artifact@v4
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ../build.log
+          cp app/build/outputs/apk/release/app-release.apk ../ToDoList.apk
+      - name: Publish APK
+        if: success()
+        uses: softprops/action-gh-release@v2
         with:
-          name: ToDoList-apk
-          path: ToDoList.apk
+          tag_name: todo-apk-${{ github.run_number }}
+          name: To Do List APK ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          files: ToDoList.apk
+      - name: Publish build log (on failure)
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: todo-apk-failed-${{ github.run_number }}
+          name: To Do List build failed ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          files: build.log
