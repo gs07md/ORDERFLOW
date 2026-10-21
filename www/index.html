@@ -273,6 +273,15 @@ h1{font-weight:700;font-size:30px;line-height:1.1;margin:0;letter-spacing:-.01em
 .calpick small{color:var(--muted);font-size:12.5px}
 .calpick i{width:12px;height:12px;border-radius:50%;flex:0 0 12px}
 
+/* category row in the add box */
+.catrow{display:flex;gap:6px;flex-wrap:wrap;padding:2px 0}
+.catrow .cl{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;width:100%}
+.catrow::-webkit-scrollbar{display:none}
+.catrow button{flex:0 0 auto;border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:600;color:var(--ink);min-height:36px;white-space:nowrap}
+.catrow button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.catrow button.new{border-style:dashed;color:var(--muted)}
+.catrow input{flex:0 0 140px;border:1px solid var(--accent);border-radius:999px;padding:6px 12px;font-size:14px;min-width:0;background:var(--bg);color:var(--ink)}
+
 /* sheets */
 .sheet-bg{position:fixed;inset:0 0 var(--kb,0px) 0;background:var(--shade);display:flex;align-items:flex-end;justify-content:center;z-index:20}
 .sheet{background:var(--surface);width:100%;max-width:560px;border-radius:20px 20px 0 0;
@@ -464,10 +473,11 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <button type="button" class="tbb" id="tbDate" aria-haspopup="true"></button>
       <button type="button" class="tbb" id="tbTime" aria-haspopup="true"></button>
       <button type="button" class="tbb" id="tbRep" aria-haspopup="true" aria-label="Repeat"></button>
-      <button type="button" class="tbb" id="tbPrio" aria-haspopup="true" aria-label="Priority and category"></button>
+      <button type="button" class="tbb" id="tbPrio" aria-haspopup="true" aria-label="Priority"></button>
       <button type="button" class="tbb" id="tbWho" aria-haspopup="true" aria-label="Contact: call or WhatsApp"></button></div>
       <button type="submit" class="sendbtn" aria-label="Add task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </div>
+    <div class="catrow" id="aCats" role="group" aria-label="Category"></div>
     <div class="panel" id="addPanel" hidden></div>
     <div class="ahint" id="aHint"></div>
     <div class="freq" id="freq"></div>
@@ -704,7 +714,7 @@ const K_TASKS='aajnukaam.tasks', K_SET='aajnukaam.settings', K_DEV='aajnukaam.de
 let PIN=null;
 const LOCAL=['rung','preRung','ack'];
 const DEF={tone:'classic',vol:0.85,ringMins:3,vib:1,speak:1,repeat:3,pre:0,summary:'09:00',voice:'en-IN',theme:'auto',
-  cats:['Shop','Payment','Delivery','Order','Home','Personal'],people:[],name:'',mine:0,listId:'',lastSync:0};
+  cats:['Personal','Home','Family','Health','Money','Work','Shopping'],people:[],name:'',mine:0,listId:'',lastSync:0};
 let tasks=[],S={},view='today',cat='all',who='all',query='',editId=null,editPrio=4,editItems=[],ringQueue=[],ringing=null,laterFor=null,calMonth=null,calSel=null;
 let aManual={date:false,time:false,rep:false,prio:false};
 const K_EXP='aajnukaam.exps',K_XS='aajnukaam.xsince',K_HAB='aajnukaam.habits',K_LST='aajnukaam.lists',K_DS='aajnukaam.dsince';
@@ -987,7 +997,7 @@ function paintAdd(){
   tb('#tbDate','📅 '+(dv?shortDate(dv):'No date'),dv&&dv!==ymd(Date.now()),'date');
   tb('#tbTime',tv?'⏰ '+hm(new Date('2000-01-01T'+tv).getTime()):'⏰ Add time',!!tv,'time');
   tb('#tbRep',rp!=='none'?'🔁 '+REP_L[rp]:'🔁',rp!=='none','rep');$('#tbRep').classList.toggle('icon',rp==='none');
-  tb('#tbPrio',(pr!=='4'?'⚑ '+PRIO_L[pr]:'⚑')+(ct?' · '+ct:''),pr!=='4'||!!ct,'prio');$('#tbPrio').classList.toggle('icon',pr==='4'&&!ct);
+  tb('#tbPrio',pr!=='4'?'⚑ '+PRIO_L[pr]:'⚑',pr!=='4','prio');$('#tbPrio').classList.toggle('icon',pr==='4');paintCats(ct);
   const cp=digits10(addC.phone),cl=(addC.act&&ACT[addC.act]?ACT[addC.act].l.split(' ')[0]:'👤')+(addC.cname||cp?' '+(addC.cname||cp.slice(-4)):'');
   tb('#tbWho',cl,!!(cp||addC.act),'who');$('#tbWho').classList.toggle('icon',!(cp||addC.cname||addC.act));
   const P=$('#addPanel');P.innerHTML='';P.hidden=!addPanel;
@@ -1023,9 +1033,7 @@ function paintAdd(){
         b.onclick=()=>{addC.act=k;addC.manual=true;[...box3.children].forEach(x=>x.setAttribute('aria-pressed',x===b));msgI.hidden=k!=='wa';paintTbWho()};box3.appendChild(b)});
       const msgI=document.createElement('textarea');msgI.rows=2;msgI.placeholder='WhatsApp message (ready to send)';msgI.value=addC.msg;msgI.hidden=addC.act!=='wa';msgI.setAttribute('aria-label','WhatsApp message');msgI.oninput=()=>{addC.msg=msgI.value};P.appendChild(msgI);
     } else {head.textContent='Priority';
-      [['4','Normal'],['1','🔴 Urgent'],['2','🟠 High'],['3','🔵 Low']].forEach(([k,l])=>mk(box,l,pr===k,()=>{$('#aPrio').value=k;aManual.prio=true},true));
-      const h2=document.createElement('div');h2.className='pt';h2.textContent='Category';const box2=document.createElement('div');box2.className='chips';P.append(h2,box2);
-      [['','None'],...S.cats.map(c=>[c,c])].forEach(([k,l])=>mk(box2,l,ct===k,()=>{$('#aCat').value=k}));
+      [['4','Normal'],['1','🔴 Urgent'],['2','🟠 High'],['3','🔵 Low']].forEach(([k,l])=>mk(box,l,pr===k,()=>{$('#aPrio').value=k;aManual.prio=true}));
     }
   }
   const h=$('#aHint');
@@ -1035,6 +1043,16 @@ function paintAdd(){
   $('.sendbtn').disabled=!$('#quick').value.trim();
 }
 ['date','time','rep','prio','who'].forEach(k=>{$('#tb'+{date:'Date',time:'Time',rep:'Rep',prio:'Prio',who:'Who'}[k]).onclick=()=>{addPanel=addPanel===k?null:k;paintAdd();if(addPanel==='who'&&!Native)setTimeout(()=>{const e=$('#aCname');if(e)e.focus()},50)}});
+const CAT_IC={Personal:'🙂',Home:'🏠',Family:'👨‍👩‍👧',Health:'💊',Money:'💰',Work:'💼',Shopping:'🛒',Shop:'🏪',Payment:'💳',Delivery:'🚚',Order:'📦',Bills:'🧾',Travel:'✈️',Study:'📚',Friends:'🧑‍🤝‍🧑'};
+let catNew=false;
+function paintCats(ct){const box=$('#aCats');if(!box)return;box.innerHTML='';box.hidden=!!addPanel;const lb=document.createElement('div');lb.className='cl';lb.textContent='Category';box.appendChild(lb);
+  S.cats.forEach(c=>{const b=document.createElement('button');b.type='button';b.textContent=(CAT_IC[c]?CAT_IC[c]+' ':'')+c;b.setAttribute('aria-pressed',ct===c);
+    b.onclick=()=>{$('#aCat').value=ct===c?'':c;paintAdd();$('#quick').focus({preventScroll:true})};box.appendChild(b)});
+  if(catNew){const i=document.createElement('input');i.placeholder='New category';i.maxLength=20;i.setAttribute('aria-label','New category');
+    const done=()=>{const v=i.value.trim().replace(/\s+/g,' ');catNew=false;if(v){const nm=v[0].toUpperCase()+v.slice(1);const ex=S.cats.find(c=>c.toLowerCase()===nm.toLowerCase());
+      if(!ex){S.cats.push(nm);saveS();renderCats()}$('#aCat').value=ex||nm}paintAdd();$('#quick').focus({preventScroll:true})};
+    i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();done()}else if(e.key==='Escape'){catNew=false;paintAdd()}};i.onblur=done;box.appendChild(i);setTimeout(()=>i.focus(),30)}
+  else{const n=document.createElement('button');n.type='button';n.className='new';n.textContent='+ New';n.onclick=()=>{catNew=true;paintCats($('#aCat').value)};box.appendChild(n)}}
 function paintTbWho(){const cp=digits10(addC.phone),b=$('#tbWho');b.textContent=(addC.act&&ACT[addC.act]?ACT[addC.act].l.split(' ')[0]:'👤')+(addC.cname||cp?' '+(addC.cname||cp.slice(-4)):'');
   b.classList.toggle('set',!!(cp||addC.act));b.classList.toggle('icon',!(cp||addC.cname||addC.act))}
 function pickContact(cb){if(!Native)return;Native.pickContact().then(r=>{if(r&&r.phone){cb({name:r.name||'',phone:digits10(r.phone)||r.phone})}}).catch(()=>toast('Could not open contacts'))}
@@ -1862,6 +1880,8 @@ if(window.visualViewport){const vv=window.visualViewport;const kb=()=>{const h=M
 
 /* ---------- init ---------- */
 S=Object.assign({},DEF,ls.get(K_SET)||{});
+if(JSON.stringify(S.cats)===JSON.stringify(['Shop','Payment','Delivery','Order','Home','Personal'])){const used=new Set((ls.get(K_TASKS)||[]).map(t=>t&&t.cat).filter(Boolean));
+  S.cats=[...DEF.cats,...['Shop','Payment','Delivery','Order'].filter(c=>used.has(c))];ls.set(K_SET,S)}
 if(!Array.isArray(S.cats)||!S.cats.length)S.cats=DEF.cats.slice();
 S.listId='MAINLIST';PIN=ls.get(K_PIN);
 applyTheme();
