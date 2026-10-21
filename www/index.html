@@ -336,7 +336,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .lockbox p.err{color:var(--p1);font-weight:600}
 .lockbox input{border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:14px;font-size:26px;letter-spacing:.4em;text-align:center;width:100%}
 .lockbox input:focus{border-color:var(--accent);outline:none}
-.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:12px;font-size:14px;z-index:60;display:flex;gap:14px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.toast{position:fixed;left:50%;width:max-content;bottom:calc(150px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:12px;font-size:14px;z-index:60;display:flex;gap:14px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
 .toast button{border:0;background:transparent;color:var(--accent-soft);font-weight:700;padding:0}
 </style>
 </head>
@@ -457,7 +457,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
 <!-- Expense sheet -->
 <div class="sheet-bg" id="xBg" hidden>
-  <form class="sheet" id="xForm" autocomplete="off">
+  <form class="sheet" id="xForm" autocomplete="off" role="dialog" aria-modal="true" aria-labelledby="xHead">
     <div class="addtop"><span class="lbl" id="xHead">New expense</span><button type="button" class="linkbtn" id="xClose">Close</button></div>
     <div class="seg" id="xType"><button type="button" data-t="out">💸 Spent</button><button type="button" data-t="in">💰 Received</button></div>
     <div class="xamt"><span>₹</span><input id="xAmt" inputmode="decimal" placeholder="0" aria-label="Amount" enterkeyhint="next"></div>
@@ -597,7 +597,7 @@ const DEF={tone:'classic',vol:0.85,ringMins:3,vib:1,speak:1,repeat:3,pre:0,summa
 let tasks=[],S={},view='today',cat='all',who='all',query='',editId=null,editPrio=4,editItems=[],ringQueue=[],ringing=null,laterFor=null,calMonth=null,calSel=null;
 let aManual={date:false,time:false,rep:false,prio:false};
 const K_EXP='aajnukaam.exps',K_XS='aajnukaam.xsince';
-let exps=[],xMonth=null,xCat='all',xEdit=null,xSetType='out',xSetCat='',xSetMode='cash',xCatManual=false,xBudgetEdit=false;
+let exps=[],xMonth=null,xCat='all',xEdit=null,xSetType='out',xSetCat='',xSetMode='cash',xCatManual=false,xBudgetEdit=false,xBudgetDraft='',xBudgetFocus=false;
 try{exps=JSON.parse(localStorage.getItem(K_EXP))||[]}catch(e){exps=[]}
 if(!Array.isArray(exps))exps=[];
 
@@ -741,9 +741,10 @@ function render(){
   $('#progLine').hidden=view!=='today'||!!query;
   $('#viewTitle').textContent=query?'Search':TITLES[view];
   try{if(navigator.setAppBadge){pendToday?navigator.setAppBadge(pendToday):navigator.clearAppBadge()}}catch(e){}
-  const area=$('#listArea');area.innerHTML='';
-  $('#cats').hidden=view==='money';$('#fab').setAttribute('aria-label',view==='money'?'New expense':'New task');
-  if(view==='money'){renderMoney(area);return}
+  const area=$('#listArea');
+  $('#cats').hidden=view==='money';$('#searchIn').placeholder=view==='money'?'Search… note, category, amount':'Search… task, party, number';
+  if(view!=='money')area.innerHTML='';$('#fab').setAttribute('aria-label',view==='money'?'New expense':'New task');
+  if(view==='money'){const ae=document.activeElement;if(xBudgetEdit&&ae&&ae.closest&&ae.closest('.xbset')&&!query)return;area.innerHTML='';renderMoney(area);return}
   if(view==='done'&&!query)area.appendChild(statsEl());
   if(view==='cal'&&!query){renderCal(area);return}
   let list=L.filter(t=>matches(t)&&(query?true:inView(t)));
@@ -958,64 +959,88 @@ $('#addBg').onclick=e=>{if(e.target.id==='addBg')closeAdd()};
 $('#searchBtn').onclick=()=>{const open=$('#searchBox').hidden;$('#searchBox').hidden=!open;$('#searchBtn').setAttribute('aria-pressed',open);
   if(open)$('#searchIn').focus();else{query='';$('#searchIn').value='';cat='all';who='all';renderCats();render()}};
 
-function setView(v){view=v;$$('#nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v));window.scrollTo(0,0);render()}
+function setView(v){view=v;xBudgetEdit=false;$$('#nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v));window.scrollTo(0,0);render()}
 $('#nav').onclick=e=>{const b=e.target.closest('button');if(b){if(query){query='';$('#searchIn').value=''}setView(b.dataset.v)}};
 
 /* ---------- expenses ---------- */
-const XCATS=['Food','Fuel','Shop','Stock','Bills','Rent','Salary','Travel','Shopping','Health','Home','Sale','Payment','Other'];
-const XIC={Food:'🍽',Fuel:'⛽',Shop:'🏪',Stock:'📦',Bills:'💡',Rent:'🏠',Salary:'👷',Travel:'🚌',Shopping:'🛍',Health:'💊',Home:'🏡',Sale:'🧾',Payment:'💰',Other:'💸'};
+const XCATS=['Food','Fuel','Shop','Stock','Bills','Rent','Salary','Travel','Personal','Health','Home','Sale','Payment','Other'];
+const XIC={Food:'🍽',Fuel:'⛽',Shop:'🏪',Stock:'📦',Bills:'💡',Rent:'🏠',Salary:'👷',Travel:'🚌',Personal:'🛍',Shopping:'🛍',Health:'💊',Home:'🏡',Sale:'🧾',Payment:'💰',Other:'💸'};
 const XMODE={cash:'Cash',upi:'UPI',card:'Card',bank:'Bank'};
-const XGUESS=[[/petrol|diesel|fuel|cng|પેટ્રોલ|ડીઝલ/i,'Fuel'],[/\b(tea|chai|cha|nasto|nashto|lunch|dinner|breakfast|food|khana|jaman|jamvanu|hotel|snacks?|pani|water)\b|ચા|નાસ્તો|જમવા/i,'Food'],
-  [/light|electric|bill|recharge|wifi|internet|gas|mobile|લાઈટ/i,'Bills'],[/\b(rent|bhadu|bhada)\b|ભાડું/i,'Rent'],[/salary|pagar|પગાર|majuri|labou?r/i,'Salary'],
-  [/\b(bus|auto|rickshaw|train|travel|toll|taxi|ola|uber|rapido|parking)\b/i,'Travel'],[/medicine|doctor|dava|hospital|dawa|દવા/i,'Health'],
-  [/\b(stock|maal|parts?|purchase|kharidi|order)\b|માલ/i,'Stock'],[/\b(sale|sold|vechan)\b/i,'Sale']];
+// whole-word match that also works for Gujarati (\b does not)
+const GW=(w,tail='')=>new RegExp('(?:^|[\\s,.;:/()+\\-])(?:'+w+')(?=$|[\\s,.;:/()+\\-])'+tail,'i');
+const XGUESS_OUT=[
+  ['Stock',GW('stock|maal|parts?|spares?|purchase|kharidi|order|માલ|ખરીદી')],
+  ['Fuel',GW('petrol|diesel|fuel|cng|પેટ્રોલ|ડીઝલ','(?![\\s-]*(?:filter|pump|pipe|tank|cap|gauge|injector|line|nozzle))')],
+  ['Food',GW('tea|chai|cha|coffee|nasto|nashto|lunch|dinner|breakfast|food|khana|jaman|jamvanu|hotel|snacks?|pani|water|ચા|નાસ્તો|જમવા|જમવાનું|ભોજન')],
+  ['Rent',GW('rent|bhadu|bhada|ભાડું|ભાડુ')],
+  ['Salary',GW('salary|pagar|majuri|labou?r|પગાર|મજૂરી')],
+  ['Bills',GW('light\\s*bill|electricity|electric\\s*bill|current\\s*bill|recharge|wifi|wi-fi|internet|broadband|dth|cylinder|gas\\s*(?:bill|bottle)|(?:mobile|phone)\\s*bill|લાઈટ\\s*બિલ|રિચાર્જ')],
+  ['Travel',GW('auto|rickshaw|bus|train|travel|toll|taxi|ola|uber|rapido|parking|ticket|રિક્ષા')],
+  ['Health',GW('medicine|doctor|dava|dawa|hospital|clinic|દવા|ડોક્ટર')]];
+const XGUESS_IN=[['Sale',GW('sale|sold|vechan|વેચાણ')],['Payment',GW('payment|ugharani|udhar|jama|ઉઘરાણી|જમા')]];
+function guessCat(v,type){const g=(type==='in'?XGUESS_IN:XGUESS_OUT).find(([,re])=>re.test(' '+normDigits(v)+' '));return g?g[0]:(type==='in'?'Sale':'')}
 const xcats=()=>{const l=Array.isArray(S.xcats)&&S.xcats.length?S.xcats:XCATS.slice();return l};
 const liveX=()=>exps.filter(x=>!x.deleted);
-const rs=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+const rs=n=>{n=Math.round(Number(n||0)*100)/100;return '₹'+n.toLocaleString('en-IN',Number.isInteger(n)?{maximumFractionDigits:0}:{minimumFractionDigits:2,maximumFractionDigits:2})};
 const xIcon=c=>XIC[c]||'💸';
 function saveX(){try{localStorage.setItem(K_EXP,JSON.stringify(exps))}catch(e){toast('Phone storage full — could not save')}}
-function touchX(x){x.u=Date.now();x.dirty=1;return x}
-function parseAmt(v){v=String(v||'').replace(/[₹,\s]/g,'').replace(/rs\.?/i,'');if(!v)return NaN;
-  if(!/^[\d.+\-]+$/.test(v))return NaN;const parts=v.match(/[+\-]?[\d.]+/g);if(!parts)return NaN;
-  let t=0;for(const p of parts){const n=parseFloat(p);if(!Number.isFinite(n))return NaN;t+=n}return Math.round(t*100)/100}
+function touchX(x){x.u=Math.max(Date.now(),(x.u||0)+1);x.dirty=1;return x}
+function bumpMeta(){S.xmetaU=Math.max(Date.now(),(S.xmetaU||0)+1)}
+// "1,250.50" "₹ 250" "250rs" "100+50" "૨૫૦" → number; anything else → NaN
+function parseAmt(v){v=normDigits(String(v||'')).toLowerCase().replace(/rupees?|inr|rs\.?|₹|\/-|,|\s/g,'');if(!v)return NaN;
+  if(!/^[+\-]?\d+(?:\.\d+)?(?:[+\-]\d+(?:\.\d+)?)*$/.test(v))return NaN;
+  let t=0;for(const p of v.match(/[+\-]?\d+(?:\.\d+)?/g))t+=parseFloat(p);return Math.round(t*100)/100}
+// amount typed inside the note: "250 petrol", "petrol 250", "petrol ₹250", "250rs chai" (not "bill no 4521", not tiny counts like "2 chai")
+const NUM='(?:₹|rs\\.?)?\\s*(\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*(?:rs\\.?|₹|\\/-|rupees?)?';
+function noteAmt(v){const s=normDigits(v||'');let at,len,num;
+  const e=s.match(new RegExp('(\\S)\\s+'+NUM+'\\s*$','i'));
+  if(e&&!/(?:^|\s)(?:no\.?|#|number|nambar|bill)$/i.test(s.slice(0,e.index+1).trim())){at=e.index+1;len=e[0].length-1;num=e[2]}
+  else{const b=s.match(new RegExp('^\\s*'+NUM+'\\s+(?=\\S)','i'));if(!b)return null;at=0;len=b[0].length;num=b[1]}
+  const a=parseAmt(num);if(!Number.isFinite(a)||a<5)return null;
+  return{a,rest:(s.slice(0,at)+' '+s.slice(at+len)).replace(/\s+/g,' ').trim()}}
 function mKey(ts){const d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)}
 function monthName(k){const[y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'})}
 function shiftMonth(k,n){const[y,m]=k.split('-').map(Number);return mKey(new Date(y,m-1+n,1).getTime())}
-function xMatches(x){if(!query)return true;const q=query.toLowerCase();return (x.n+' '+x.c+' '+XMODE[x.m]+' '+x.a).toLowerCase().includes(q)}
+const curMonth=()=>xMonth||mKey(Date.now());
+function xDay(ts){return new Date(ts).getFullYear()===new Date().getFullYear()?dayLabel(ts):new Date(ts).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}
+function xMatches(x){if(!query)return true;const q=query.toLowerCase().replace(/[,₹\s]/g,'');
+  const hay=(x.n+' '+x.c+' '+XMODE[x.m]+' '+(x.t==='in'?'received':'spent')+' '+x.a+' '+x.a.toFixed(2)).toLowerCase().replace(/[,\s]/g,'');return hay.includes(q)}
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
 function renderMoney(area){
-  if(!xMonth)xMonth=mKey(Date.now());
-  const[Y,M]=xMonth.split('-').map(Number);const ms=new Date(Y,M-1,1).getTime(),me=new Date(Y,M,1).getTime();
+  const mk=curMonth();
+  const[Y,M]=mk.split('-').map(Number);const ms=new Date(Y,M-1,1).getTime(),me=new Date(Y,M,1).getTime();
   const L=liveX();const inM=L.filter(x=>x.at>=ms&&x.at<me);
   const out=inM.filter(x=>x.t!=='in'),inc=inM.filter(x=>x.t==='in');
   const sum=a=>Math.round(a.reduce((s,x)=>s+x.a,0)*100)/100;
-  const spent=sum(out),recv=sum(inc);const isNow=xMonth===mKey(Date.now());
+  const spent=sum(out),recv=sum(inc);const isNow=mk===mKey(Date.now());
   if(!query){
     const box=el('div','xsum');
     const mh=el('div','xmonth');const pv=el('button',null,'‹'),nx=el('button',null,'›');pv.setAttribute('aria-label','Previous month');nx.setAttribute('aria-label','Next month');
-    pv.onclick=()=>{xMonth=shiftMonth(xMonth,-1);xCat='all';render()};nx.onclick=()=>{xMonth=shiftMonth(xMonth,1);xCat='all';render()};
-    mh.append(pv,el('b',null,monthName(xMonth)),nx);box.appendChild(mh);
-    const big=el('div','xbig',rs(spent));big.appendChild(el('small',null,'spent'+(isNow?' this month':' in '+monthName(xMonth).split(' ')[0])));box.appendChild(big);
+    const go=n=>{const k=shiftMonth(mk,n);xMonth=k===mKey(Date.now())?null:k;xCat='all';xBudgetEdit=false;render()};pv.onclick=()=>go(-1);nx.onclick=()=>go(1);
+    mh.append(pv,el('b',null,monthName(mk)),nx);box.appendChild(mh);
+    const big=el('div','xbig',rs(spent));big.appendChild(el('small',null,'spent'+(isNow?' this month':' in '+monthName(mk).split(' ')[0])));box.appendChild(big);
     const nums=el('div','xnums');
     const addN=(label,val,cls)=>{const d=el('span');d.append(label+' ');const b=el('b',cls,val);d.appendChild(b);nums.appendChild(d)};
-    if(isNow){const st=startToday();addN('Today',rs(sum(out.filter(x=>x.at>=st))))}
+    if(isNow){const st=startToday();addN('Today',rs(sum(out.filter(x=>x.at>=st&&x.at<st+864e5))))}
     if(recv)addN('Received',rs(recv),'in');
-    if(out.length){const days=isNow?new Date().getDate():new Date(Y,M,0).getDate();addN('Per day',rs(Math.round(spent/days)))}
+    if(out.length&&ms<=Date.now()){const days=isNow?new Date().getDate():new Date(Y,M,0).getDate();const upTo=isNow?sum(out.filter(x=>x.at<startToday()+864e5)):spent;addN('Per day',rs(Math.round(upTo/days)))}
     if(nums.children.length)box.appendChild(nums);
     const bud=+S.xbudget||0;
-    if(xBudgetEdit){const f=el('div','xbset');const i=el('input');i.inputMode='numeric';i.placeholder='Monthly budget ₹';i.value=bud||'';i.setAttribute('aria-label','Monthly budget');
+    if(xBudgetEdit){const f=el('div','xbset');const i=el('input');i.inputMode='decimal';i.placeholder='Monthly budget ₹';i.value=xBudgetDraft;i.setAttribute('aria-label','Monthly budget');
+      i.oninput=()=>{xBudgetDraft=i.value};
       const ok=el('button','btn primary sm','Save');const cl=el('button','btn sm','Cancel');
-      const done=()=>{const v=parseAmt(i.value);S.xbudget=Number.isFinite(v)&&v>0?v:0;S.xmetaU=Date.now();saveS();xBudgetEdit=false;render()};
-      ok.onclick=done;i.onkeydown=e=>{if(e.key==='Enter')done()};cl.onclick=()=>{xBudgetEdit=false;render()};f.append(i,ok,cl);box.appendChild(f);setTimeout(()=>i.focus(),50)}
+      const done=()=>{const v=parseAmt(i.value);if(i.value.trim()&&!(Number.isFinite(v)&&v>0)){toast('Enter the budget in ₹, or leave it empty to remove it');i.focus();return}
+        S.xbudget=Number.isFinite(v)&&v>0?Math.min(v,1e9):0;bumpMeta();saveS();xBudgetEdit=false;render();toast(S.xbudget?'Budget set ✓ '+rs(S.xbudget)+' a month':'Budget removed')};
+      ok.onclick=done;i.onkeydown=e=>{if(e.key==='Enter')done()};cl.onclick=()=>{xBudgetEdit=false;render()};f.append(i,ok,cl);box.appendChild(f);if(xBudgetFocus){xBudgetFocus=false;setTimeout(()=>i.focus(),50)}}
     else if(bud){const b=el('div','xbudget'+(spent>bud?' over':''));const left=bud-spent;
       const t=el('span');t.append(spent>bud?'Over budget by ':'Left: ');t.appendChild(el('b',null,rs(Math.abs(left))));t.append(' of '+rs(bud)+' ');
-      const ch=el('button','linkbtn','Change');ch.style.fontSize='13px';ch.onclick=()=>{xBudgetEdit=true;render()};t.appendChild(ch);
+      const ch=el('button','linkbtn','Change');ch.style.fontSize='13px';ch.onclick=()=>{xBudgetEdit=true;xBudgetDraft=String(bud);xBudgetFocus=true;render()};t.appendChild(ch);
       const bar=el('div','bar');const fill=el('i');fill.style.width=Math.min(100,spent/bud*100)+'%';bar.appendChild(fill);b.append(t,bar);box.appendChild(b)}
-    else{const sb=el('button','linkbtn','+ Set monthly budget');sb.style.alignSelf='flex-start';sb.style.fontSize='14px';sb.onclick=()=>{xBudgetEdit=true;render()};box.appendChild(sb)}
+    else{const sb=el('button','linkbtn','+ Set monthly budget');sb.style.alignSelf='flex-start';sb.style.fontSize='14px';sb.onclick=()=>{xBudgetEdit=true;xBudgetDraft='';xBudgetFocus=true;render()};box.appendChild(sb)}
     const byCat=new Map();out.forEach(x=>byCat.set(x.c||'Other',(byCat.get(x.c||'Other')||0)+x.a));
     if(byCat.size){const cs=el('div','xcats');const mx=Math.max(...byCat.values());
       [...byCat.entries()].sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>{const r=el('button','xcat');r.setAttribute('aria-pressed',xCat===c);
-        const nm=el('span','nm');nm.append(c+' · '+Math.round(v/spent*100)+'%');const bar=el('i');bar.style.width=Math.max(3,v/mx*100)+'%';nm.appendChild(bar);
+        const nm=el('span','nm');const pc=v/spent*100;nm.append(c+' · '+(pc>0&&pc<1?'<1':Math.round(pc))+'%');const bar=el('i');bar.style.width=Math.max(3,v/mx*100)+'%';nm.appendChild(bar);
         r.append(el('span',null,xIcon(c)),nm,el('span','v',rs(Math.round(v*100)/100)));r.onclick=()=>{xCat=xCat===c?'all':c;render()};cs.appendChild(r)});
       box.appendChild(cs)}
     area.appendChild(box);
@@ -1023,61 +1048,73 @@ function renderMoney(area){
   }
   let list=query?L.filter(xMatches):inM.filter(x=>xCat==='all'||(x.c||'Other')===xCat);
   list.sort((a,b)=>b.at-a.at||b.u-a.u);
-  if(!list.length){const e=el('div','empty');e.append(el('div','big',query?'🔍':'💸'),el('b',null,query?'Nothing found':(L.length?'No expenses in '+monthName(xMonth):'No expenses yet')),query?'Try another word.':'Tap ➕ below to add one.');area.appendChild(e);return}
-  const groups=new Map();list.slice(0,400).forEach(x=>{const k=ymd(x.at);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x)});
-  groups.forEach(items=>{const sec=el('div','sec');const h=el('div','sec-h');const sp=el('span',null,dayLabel(items[0].at));h.appendChild(sp);
+  if(!list.length){const e=el('div','empty');
+    const head=query?'Nothing found':xCat!=='all'?'No '+xCat+' expenses in '+monthName(mk):L.length?'Nothing in '+monthName(mk):'No expenses yet';
+    e.append(el('div','big',query?'🔍':'💸'),el('b',null,head),query?'Try another word or amount.':'Tap ➕ below to add one.');area.appendChild(e);return}
+  const MAXR=400;const groups=new Map();list.slice(0,MAXR).forEach(x=>{const k=ymd(x.at);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(x)});
+  groups.forEach(items=>{const sec=el('div','sec');const h=el('div','sec-h');const sp=el('span',null,xDay(items[0].at));h.appendChild(sp);
     const tot=Math.round(items.filter(x=>x.t!=='in').reduce((s,x)=>s+x.a,0)*100)/100;if(tot){const c=el('span','cnt','−'+rs(tot));h.appendChild(c)}
-    sec.appendChild(h);const card=el('div','card');items.forEach(x=>card.appendChild(xRow(x)));sec.appendChild(card);area.appendChild(sec)})}
+    sec.appendChild(h);const card=el('div','card');items.forEach(x=>card.appendChild(xRow(x)));sec.appendChild(card);area.appendChild(sec)});
+  if(list.length>MAXR){const m=el('div','swipehint','Showing the latest '+MAXR+' of '+list.length+'. Search to find older ones.');area.appendChild(m)}}
 function xRow(x){const r=el('button','xrow');r.type='button';
-  const body=el('div');body.append(el('div','tt',x.n||x.c||'Expense'),el('div','mm',[x.n?x.c:'',XMODE[x.m],query?dayLabel(x.at):'',hm(x.at)].filter(Boolean).join(' · ')));
+  const body=el('div');body.append(el('div','tt',x.n||x.c||'Expense'),el('div','mm',[x.n?x.c:'',XMODE[x.m],hm(x.at)].filter(Boolean).join(' · ')));
   r.append(el('span','xic',xIcon(x.c)),body,el('span','am'+(x.t==='in'?' in':''),(x.t==='in'?'+':'−')+rs(x.a)));
-  r.setAttribute('aria-label',(x.t==='in'?'Received ':'Spent ')+rs(x.a)+' '+(x.n||x.c));r.onclick=()=>openX(x.id);return r}
+  r.onclick=()=>openX(x.id);return r}
 
 function paintX(){
   $$('#xType button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===xSetType));
   $$('#xMode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===xSetMode));
   $('#xModeL').textContent=xSetType==='in'?'Received in':'Paid by';
+  $('#xHead').textContent=xSetType==='in'?(xEdit?'Edit money received':'Money received'):(xEdit?'Edit expense':'New expense');
   const box=$('#xCats');box.innerHTML='';
   let list=xcats();if(xSetType==='in')list=[...list.filter(c=>c==='Sale'||c==='Payment'),...list.filter(c=>c!=='Sale'&&c!=='Payment')];
   if(xSetCat&&!list.includes(xSetCat))list=[xSetCat,...list];
   list.forEach(c=>{const b=el('button',null,xIcon(c)+' '+c);b.type='button';b.setAttribute('aria-pressed',xSetCat===c);b.onclick=()=>{xSetCat=xSetCat===c?'':c;xCatManual=true;paintX()};box.appendChild(b)});
   const nb=el('button',null,'+ New');nb.type='button';nb.setAttribute('aria-pressed','false');nb.onclick=()=>{$('#xNewBox').hidden=false;$('#xNewCat').value='';$('#xNewCat').focus()};box.appendChild(nb)}
 function openX(id){const x=id?exps.find(e=>e.id===id):null;xEdit=x?x.id:null;
-  $('#xHead').textContent=x?'Edit expense':'New expense';$('#xDel').hidden=!x;$('#xNewBox').hidden=true;
+  $('#xDel').hidden=!x;$('#xNewBox').hidden=true;
   xSetType=x?x.t:'out';xSetCat=x?x.c:'';xSetMode=x?x.m:(S.xmode||'cash');xCatManual=!!x;
-  delete $('#xAmt').dataset.auto;$('#xAmt').placeholder='0';$('#xAmt').value=x?String(x.a):'';$('#xNote').value=x?x.n:'';
-  const ts=x?x.at:(xMonth&&xMonth!==mKey(Date.now())?new Date(xMonth+'-01T12:00').getTime():Date.now());
+  $('#xAmt').placeholder='0';$('#xAmt').value=x?String(x.a):'';$('#xNote').value=x?x.n:'';
+  // today; if you are looking at another month, the 1st of that month (you can change it)
+  const ts=x?x.at:(xMonth?new Date(xMonth+'-01T12:00').getTime():Date.now());
   $('#xDate').value=ymd(ts);$('#xTime').value=hmv(ts);
   paintX();showSheet('xBg');if(!x)setTimeout(()=>$('#xAmt').focus(),80)}
-$('#xType').onclick=e=>{const b=e.target.closest('button');if(!b)return;xSetType=b.dataset.t;if(!xCatManual)xSetCat=xSetType==='in'?'Sale':'';paintX()};
+$('#xType').onclick=e=>{const b=e.target.closest('button');if(!b)return;xSetType=b.dataset.t;if(!xCatManual)xSetCat=guessCat($('#xNote').value,xSetType);paintX()};
 $('#xMode').onclick=e=>{const b=e.target.closest('button');if(!b)return;xSetMode=b.dataset.m;paintX()};
 $('#xNote').oninput=()=>{const v=$('#xNote').value;
-  if(!$('#xAmt').value){const m=v.match(/^\s*(\d[\d,]*(?:\.\d+)?)\s+\S|\S\s+(\d[\d,]*(?:\.\d+)?)\s*$/);if(m){const n=(m[1]||m[2]);$('#xAmt').dataset.auto=n;$('#xAmt').placeholder=n}else{delete $('#xAmt').dataset.auto;$('#xAmt').placeholder='0'}}
-  if(!xCatManual){const g=XGUESS.find(([re])=>re.test(v));const c=g?g[1]:'';if(c!==xSetCat){xSetCat=c;paintX()}}};
+  if(!$('#xAmt').value.trim()){const na=noteAmt(v);$('#xAmt').placeholder=na?String(na.a):'0'}
+  if(!xCatManual){const c=guessCat(v,xSetType);if(c!==xSetCat){xSetCat=c;paintX()}}};
 $('#xNote').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#xForm').requestSubmit?$('#xForm').requestSubmit():$('#xForm').onsubmit(new Event('submit'))}};
 $('#xAmt').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#xNote').focus()}};
 const addNewCat=()=>{const v=$('#xNewCat').value.trim().replace(/\s+/g,' ').slice(0,30);if(!v)return;const nm=v[0].toUpperCase()+v.slice(1);
-  const l=xcats();if(!l.some(c=>c.toLowerCase()===nm.toLowerCase())){S.xcats=[...l,nm];S.xmetaU=Date.now();saveS()}xSetCat=l.find(c=>c.toLowerCase()===nm.toLowerCase())||nm;xCatManual=true;$('#xNewBox').hidden=true;paintX()};
+  const l=xcats();if(!l.some(c=>c.toLowerCase()===nm.toLowerCase())){S.xcats=[...l,nm];bumpMeta();saveS()}xSetCat=l.find(c=>c.toLowerCase()===nm.toLowerCase())||nm;xCatManual=true;$('#xNewBox').hidden=true;paintX()};
 $('#xNewAdd').onclick=addNewCat;$('#xNewCat').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();addNewCat()}};
 $('#xClose').onclick=()=>{hideSheet('xBg');xEdit=null};
 $('#xBg').onclick=e=>{if(e.target.id==='xBg'){hideSheet('xBg');xEdit=null}};
 $('#xForm').onsubmit=e=>{e.preventDefault();
-  let a=parseAmt($('#xAmt').value);if(!$('#xAmt').value.trim()&&$('#xAmt').dataset.auto)a=parseAmt($('#xAmt').dataset.auto);
-  if(!Number.isFinite(a)||a<=0){toast('Enter the amount');$('#xAmt').focus();return}
+  const av=$('#xAmt').value.trim();let n=$('#xNote').value.trim().slice(0,200);let a=parseAmt(av);
+  if(!av){const na=noteAmt(n);if(na){a=na.a;n=na.rest.slice(0,200)}}
+  if(!av&&!Number.isFinite(a)){toast('Enter the amount');$('#xAmt').focus();return}
+  if(!Number.isFinite(a)){toast('Amount should be a number, like 250 or 1,250.50');$('#xAmt').focus();return}
+  if(a<=0){toast('Amount must be more than ₹0');$('#xAmt').focus();return}
   if(a>1e9){toast('Amount is too big');$('#xAmt').focus();return}
   const dv=$('#xDate').value||ymd(Date.now()),tv=$('#xTime').value||'12:00';const d=new Date(dv+'T00:00');const[h,m]=tv.split(':');d.setHours(+h,+m,0,0);
-  let n=$('#xNote').value.trim().slice(0,200);
-  if(!$('#xAmt').value.trim()&&$('#xAmt').dataset.auto)n=n.replace($('#xAmt').dataset.auto,'').replace(/\s+/g,' ').trim();
   const c=xSetCat||(xSetType==='in'?'Sale':'Other');
   let x=xEdit&&exps.find(e=>e.id===xEdit);
   if(x){Object.assign(x,{a,t:xSetType,c,n,m:xSetMode,at:d.getTime()})}else{x={id:'x'+uid(),a,t:xSetType,c,n,m:xSetMode,at:d.getTime()};exps.push(x)}
   touchX(x);S.xmode=xSetMode;ls.set(K_SET,S);saveX();scheduleSync();
-  hideSheet('xBg');delete $('#xAmt').dataset.auto;const wasEdit=!!xEdit;xEdit=null;
-  if(mKey(x.at)!==xMonth&&!query){xMonth=mKey(x.at)}
+  hideSheet('xBg');const wasEdit=!!xEdit;xEdit=null;
+  if(!query){const k=mKey(x.at);xMonth=k===mKey(Date.now())?null:k;if(xCat!=='all'&&xCat!==x.c)xCat='all'}
   if(view!=='money')setView('money');else render();
   toast((wasEdit?'Updated ':'Saved ')+(x.t==='in'?'+':'−')+rs(a)+' · '+c)};
 $('#xDel').onclick=()=>{const x=exps.find(e=>e.id===xEdit);if(!x)return;x.deleted=true;touchX(x);saveX();scheduleSync();hideSheet('xBg');xEdit=null;render();
   toast('Deleted '+rs(x.a),'Undo',()=>{x.deleted=false;touchX(x);saveX();scheduleSync();render()})};
+function cleanXL(x){if(!x||typeof x.id!=='string'||!x.id||x.id.length>40)return null;const a=Number(x.a),at=Number(x.at);
+  if(!Number.isFinite(a)||a<=0||!Number.isFinite(at)||at<=0)return null;
+  return{id:x.id,a:Math.round(Math.min(a,1e9)*100)/100,t:x.t==='in'?'in':'out',c:typeof x.c==='string'&&x.c?x.c.slice(0,30):(x.t==='in'?'Sale':'Other'),
+    n:typeof x.n==='string'?x.n.slice(0,200):'',m:XMODE[x.m]?x.m:'cash',at:Math.round(at),u:Number(x.u)||0}}
+// deleted entries are kept a while so other phones learn about the delete, then dropped
+{const old=Date.now()-200*864e5,n0=exps.length;exps=exps.filter(x=>!(x.deleted&&!x.dirty&&(x.u||0)<old));if(exps.length!==n0)try{localStorage.setItem(K_EXP,JSON.stringify(exps))}catch(e){}}
 function mergeX(list){let changed=false;const map=new Map(exps.map(x=>[x.id,x]));
   for(const s of list){if(!s||typeof s.id!=='string')continue;const l=map.get(s.id);if(!l||(s.u||0)>(l.u||0)){map.set(s.id,s);changed=true}}
   if(changed){exps=[...map.values()];saveX();if(view==='money')render()}}
@@ -1375,8 +1412,9 @@ $('#expBtn').onclick=()=>{const blob=new Blob([JSON.stringify({v:2,at:new Date()
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='todo-list-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();toast('Backup saved')};
 $('#impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.tasks))throw 0;
   const ids=new Set(tasks.map(t=>t.id));let n=0;d.tasks.forEach(t=>{if(!ids.has(t.id)){touch(t);tasks.push(t);n++}});
-  let nx=0;if(Array.isArray(d.exps)){const xi=new Set(exps.map(x=>x.id));d.exps.forEach(x=>{if(x&&typeof x.id==='string'&&Number.isFinite(x.a)&&!xi.has(x.id)){touchX(x);exps.push(x);nx++}});saveX()}
-  save();render();toast(pl(n)+(nx?' + '+nx+' expense'+(nx===1?'':'s'):'')+' loaded')}catch(err){toast('Not a backup file')}e.target.value=''};
+  let nx=0;if(Array.isArray(d.exps)){const xi=new Map(exps.map(x=>[x.id,x]));d.exps.forEach(r=>{const x=cleanXL(r);if(!x)return;const cur=xi.get(x.id);
+      if(!cur){touchX(x);exps.push(x);nx++}else if(cur.deleted){Object.assign(cur,x,{deleted:false});touchX(cur);nx++}});saveX()}
+  save();render();const parts=[];if(n)parts.push(pl(n));if(nx)parts.push(nx+' expense'+(nx===1?'':'s'));toast(parts.length?parts.join(' + ')+' loaded':'Nothing new in this backup')}catch(err){toast('Not a backup file')}e.target.value=''};
 
 /* ---------- install ---------- */
 let deferredPrompt=null;
@@ -1424,16 +1462,17 @@ async function syncNow(){
   try{
     const sub=await getSub();
     const acks={};tasks.forEach(t=>{if(t.ack&&t.ack===t.due)acks[t.id]=t.due});
-    const xSent=exps.filter(x=>x.dirty).slice(0,3000);
-    const r=await fetch(API+'/api/sync',{method:'POST',headers:{'content-type':'application/json'},keepalive:true,
-      body:JSON.stringify({deviceId,pin:PIN,listId:'MAINLIST',name:S.name,sub:sub?sub.toJSON():null,acks,
+    const XB=250,xDirty=exps.filter(x=>x.dirty),xSent=xDirty.slice(0,XB);
+    const payload=JSON.stringify({deviceId,pin:PIN,listId:'MAINLIST',name:S.name,sub:sub?sub.toJSON():null,acks,
         tasks:tasks.filter(t=>!t.ex).map(strip),settings:{pre:S.pre,repeat:S.repeat,summary:S.summary,mine:!!S.mine},tzOff:-new Date().getTimezoneOffset(),
-        exps:xSent.map(({dirty,...x})=>x),xSince:+ls.get(K_XS)||0,xMeta:S.xmetaU?{u:S.xmetaU,budget:+S.xbudget||0,cats:xcats()}:null})});
+        exps:xSent.map(({dirty,...x})=>x),xSince:+ls.get(K_XS)||0,xMeta:S.xmetaU?{u:S.xmetaU,budget:+S.xbudget||0,cats:xcats()}:null});
+    // keepalive lets a sync finish while the app closes, but browsers refuse keepalive bodies over 64 KB
+    const r=await fetch(API+'/api/sync',{method:'POST',headers:{'content-type':'application/json'},keepalive:payload.length<60000,body:payload});
     if(r.status===401){syncing=false;PIN=null;ls.set(K_PIN,null);showLock('Your PIN was changed. Enter the new PIN.',true);return}
     if(!r.ok)throw new Error('sync '+r.status);
     const d=await r.json();if((d.tasks||[]).some(t=>!t.deleted)&&tasks.some(t=>t.ex)){tasks=tasks.filter(t=>!t.ex);saveLocal()}mergeServer(d.tasks||[]);
     if(Number.isFinite(d.xNow)){const sentU=new Map(xSent.map(x=>[x.id,x.u]));exps.forEach(x=>{if(x.dirty&&sentU.get(x.id)===x.u)delete x.dirty});saveX();mergeX(d.exps||[]);ls.set(K_XS,d.xNow);
-      const mt=d.xMeta;if(mt&&mt.u>(S.xmetaU||0)){S.xmetaU=mt.u;S.xbudget=mt.budget||0;if(mt.cats&&mt.cats.length)S.xcats=mt.cats;ls.set(K_SET,S);if(view==='money')render()}if(xSent.length>=3000)syncAgain=true}
+      const mt=d.xMeta;if(mt&&mt.u>(S.xmetaU||0)){S.xmetaU=mt.u;S.xbudget=mt.budget||0;if(mt.cats&&mt.cats.length)S.xcats=mt.cats;ls.set(K_SET,S);if(view==='money')render()}if(xDirty.length>XB)syncAgain=true}
     S.lastSync=Date.now();ls.set(K_SET,S);syncErr=false;
   }catch(e){syncErr=true}
   syncing=false;syncStatusText();
