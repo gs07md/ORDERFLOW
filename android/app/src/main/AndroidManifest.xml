@@ -78,6 +78,15 @@
 
         <receiver android:name=".AlarmReceiver" android:exported="false" />
         <receiver android:name=".ActionReceiver" android:exported="false" />
+        <receiver android:name=".TodoWidget" android:exported="true" android:label="To Do List">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/todo_widget_info" />
+        </receiver>
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

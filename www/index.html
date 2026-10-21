@@ -987,7 +987,7 @@ const xcats=()=>{const l=Array.isArray(S.xcats)&&S.xcats.length?S.xcats:XCATS.sl
 const liveX=()=>exps.filter(x=>!x.deleted);
 const rs=n=>{n=Math.round(Number(n||0)*100)/100;return '₹'+n.toLocaleString('en-IN',Number.isInteger(n)?{maximumFractionDigits:0}:{minimumFractionDigits:2,maximumFractionDigits:2})};
 const xIcon=c=>XIC[c]||'💸';
-function saveX(){try{localStorage.setItem(K_EXP,JSON.stringify(exps))}catch(e){toast('Phone storage full — could not save')}}
+function saveX(){try{localStorage.setItem(K_EXP,JSON.stringify(exps))}catch(e){toast('Phone storage full — could not save')}if(Native)nativeSoon()}
 function touchX(x){x.u=Math.max(Date.now(),(x.u||0)+1);x.dirty=1;return x}
 function bumpMeta(){S.xmetaU=Math.max(Date.now(),(S.xmetaU||0)+1)}
 // "1,250.50" "₹ 250" "250rs" "100+50" "૨૫૦" → number; anything else → NaN
@@ -1540,14 +1540,21 @@ function nativeSync(){if(!Native)return;const now=Date.now();const alarms=[];
       alarms.push({id:t.id+'@'+at,taskId:t.id,at,title:t.title,body:[t.cat,t.note].filter(Boolean).join(' · ').slice(0,200),
         phone:tp?'+91'+tp:'',cname:t.cname||'',act:tp?(t.act||''):'',msg:t.msg||'',prio:t.prio||4})})});
   alarms.sort((a,b)=>a.at-b.at);
-  Native.sync({alarms:alarms.slice(0,200),ringMins:S.ringMins||3,vibrate:!!S.vib}).catch(e=>console.log('alarm sync failed',e))}
+  Native.sync({alarms:alarms.slice(0,200),ringMins:S.ringMins||3,vibrate:!!S.vib}).catch(e=>console.log('alarm sync failed',e));nativeWidget()}
+// home-screen widget: open tasks for the next few days (it shows today's) and recent spending
+function nativeWidget(){if(!Native||typeof Native.widget!=='function')return;const st=startToday(),lim=st+3*864e5;
+  const tk=live().filter(t=>!t.done&&t.due&&t.due<lim&&mineOk(t)).sort(sortT).slice(0,40).map(t=>({id:t.id,at:t.due,title:String(t.title).slice(0,80),allDay:!!t.allDay}));
+  const ex=liveX().filter(x=>x.t!=='in'&&x.at>=st-864e5&&x.at<lim).map(x=>({at:x.at,a:x.a}));
+  const L=live();const doneToday=L.filter(t=>t.done&&t.doneAt>=st).length+L.filter(t=>!t.done&&t.lastDoneAt>=st).length;
+  Native.widget({tasks:tk,exps:ex,doneToday,day:ymd(Date.now())}).catch(()=>{})}
 async function nativeActions(){if(!Native)return;let r;try{r=await Native.takeActions()}catch(e){return}
-  const acts=(r&&r.actions)||[];if(!acts.length)return;
-  acts.forEach(a=>{const t=tasks.find(x=>x.id===a.taskId);if(!t||t.done||t.deleted)return;
+  const acts=(r&&r.actions)||[];if(!acts.length)return;let wOpen='';
+  acts.forEach(a=>{if(a.action==='widget'){wOpen=a.what;return}const t=tasks.find(x=>x.id===a.taskId);if(!t||t.done||t.deleted)return;
     if(a.action==='done'){if(t.due===a.at||(t.repeat&&t.repeat!=='none'&&t.due<=a.at))toggle(t.id,true)}
     else if(a.action==='snooze'&&a.until){if(t.due===a.at||t.due<a.until)snoozeTask(t,a.until)}
     else if(a.action==='stop'){t.ack=t.due;saveLocal()}});
-  save();render()}
+  save();render();
+  if(wOpen==='add'){if(view==='money')setView('today');openAdd()}else if(wOpen==='addx'){if(view!=='money'&&view!=='cal')setView('money');openX()}}
 function nativeSettings(){if(!Native)return;$('#nativeBox').hidden=false;
   Native.getSettings().then(r=>{if(r&&r.toneTitle)$('#nativeTone').textContent=r.toneTitle;const ok=r&&r.canExact&&r.notifications&&r.fullScreen;
     $('#nativeStatus').className='status '+(ok?'good':'bad');$('#nativeStatus').textContent=ok?'⏰ Alarms are ready — they ring even when the phone is locked.':'⚠️ Allow alarm permissions so tasks can ring.';$('#nativePerm').hidden=!!ok}).catch(()=>{})}
@@ -1555,7 +1562,7 @@ if(Native){
   $('#nativeToneBtn').onclick=()=>Native.pickRingtone().then(r=>{if(r&&r.title){$('#nativeTone').textContent=r.title;toast('Alarm sound: '+r.title)}}).catch(()=>{});
   $('#nativePerm').onclick=()=>Native.ensurePermissions().then(()=>setTimeout(nativeSettings,800)).catch(()=>{});
   $('#nativeTest').onclick=()=>Native.test({seconds:10}).then(()=>toast('Alarm will ring in 10 seconds — you can lock the phone')).catch(()=>toast('Could not set test alarm'));
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){nativeActions();nativeSoon()}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){nativeActions();nativeSoon();setTimeout(nativeActions,700)}});
   Native.getSettings().then(r=>{if(r&&!(r.canExact&&r.notifications))Native.ensurePermissions().catch(()=>{})}).catch(()=>{});
 }
 

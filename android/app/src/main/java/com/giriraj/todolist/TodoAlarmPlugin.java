@@ -49,6 +49,20 @@ public class TodoAlarmPlugin extends Plugin {
         } catch (Exception e) { call.reject("sync failed: " + e.getMessage()); }
     }
 
+    /** Data for the home-screen widget: today's open tasks and today's spend. */
+    @PluginMethod
+    public void widget(PluginCall call) {
+        try {
+            JSObject d = new JSObject();
+            d.put("tasks", call.getArray("tasks", new JSArray()));
+            d.put("exps", call.getArray("exps", new JSArray()));
+            d.put("doneToday", call.getInt("doneToday", 0));
+            d.put("day", call.getString("day", ""));
+            TodoWidget.save(getContext(), d.toString());
+            call.resolve();
+        } catch (Exception e) { call.reject("widget failed: " + e.getMessage()); }
+    }
+
     @PluginMethod
     public void takeActions(PluginCall call) {
         JSObject r = new JSObject();
