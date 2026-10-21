@@ -7,7 +7,7 @@ T="${OCI_TENANCY:-$(oci iam compartment list --all --query 'data[0]."compartment
 ZIPURL=https://raw.githubusercontent.com/gs07md/ORDERFLOW/todo-android/server/todo-list-oracle.zip
 say(){ echo "== $*"; }
 mkdir -p ~/.ssh; chmod 700 ~/.ssh
-[ -f ~/.ssh/todo_key.pub ] || { rm -f ~/.ssh/todo_key; ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/todo_key -C todo-list </dev/null; }
+[ -f ~/.ssh/todo_key.pub ] || { rm -f ~/.ssh/todo_key; ssh-keygen -q -t rsa -b 4096 -N "" -f ~/.ssh/todo_key -C todo-list </dev/null; }
 [ -f ~/.ssh/todo_key.pub ] && say "key ready" || { say "KEY_FAILED"; exit 1; }
 isid(){ case "$1" in ocid1.*) return 0;; *) return 1;; esac; }
 say "tenancy ok: $(isid "$T" && echo yes || echo no)"
