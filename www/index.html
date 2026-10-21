@@ -154,6 +154,10 @@ h1{font-weight:700;font-size:30px;line-height:1.1;margin:0;letter-spacing:-.01em
 .calgrid .dots i.late{background:var(--p1)}
 .calgrid .dots i.ok{background:var(--muted)}
 .calgrid button[aria-pressed="true"] .dots i{background:var(--accent-ink)}
+.calgrid .amt{font-size:10px;line-height:1;font-weight:600;color:var(--muted);white-space:nowrap;min-height:10px}
+.calgrid button[aria-pressed="true"] .amt{color:var(--accent-ink)}
+.calsum{font-size:13px;color:var(--muted);text-align:center}
+.calsum b{color:var(--ink)}
 
 /* fab + nav */
 .fab{position:fixed;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(78px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);box-shadow:0 6px 18px rgba(14,124,102,.35);display:grid;place-items:center;z-index:15}
@@ -1071,12 +1075,12 @@ function paintX(){
   if(xSetCat&&!list.includes(xSetCat))list=[xSetCat,...list];
   list.forEach(c=>{const b=el('button',null,xIcon(c)+' '+c);b.type='button';b.setAttribute('aria-pressed',xSetCat===c);b.onclick=()=>{xSetCat=xSetCat===c?'':c;xCatManual=true;paintX()};box.appendChild(b)});
   const nb=el('button',null,'+ New');nb.type='button';nb.setAttribute('aria-pressed','false');nb.onclick=()=>{$('#xNewBox').hidden=false;$('#xNewCat').value='';$('#xNewCat').focus()};box.appendChild(nb)}
-function openX(id){const x=id?exps.find(e=>e.id===id):null;xEdit=x?x.id:null;
+function openX(id,dayYmd){const x=id?exps.find(e=>e.id===id):null;xEdit=x?x.id:null;
   $('#xDel').hidden=!x;$('#xNewBox').hidden=true;
   xSetType=x?x.t:'out';xSetCat=x?x.c:'';xSetMode=x?x.m:(S.xmode||'cash');xCatManual=!!x;
   $('#xAmt').placeholder='0';$('#xAmt').value=x?String(x.a):'';$('#xNote').value=x?x.n:'';
   // today; if you are looking at another month, the 1st of that month (you can change it)
-  const ts=x?x.at:(xMonth?new Date(xMonth+'-01T12:00').getTime():Date.now());
+  const ts=x?x.at:dayYmd?(dayYmd===ymd(Date.now())?Date.now():new Date(dayYmd+'T12:00').getTime()):(xMonth?new Date(xMonth+'-01T12:00').getTime():Date.now());
   $('#xDate').value=ymd(ts);$('#xTime').value=hmv(ts);
   paintX();showSheet('xBg');if(!x)setTimeout(()=>$('#xAmt').focus(),80)}
 $('#xType').onclick=e=>{const b=e.target.closest('button');if(!b)return;xSetType=b.dataset.t;if(!xCatManual)xSetCat=guessCat($('#xNote').value,xSetType);paintX()};
@@ -1104,8 +1108,8 @@ $('#xForm').onsubmit=e=>{e.preventDefault();
   if(x){Object.assign(x,{a,t:xSetType,c,n,m:xSetMode,at:d.getTime()})}else{x={id:'x'+uid(),a,t:xSetType,c,n,m:xSetMode,at:d.getTime()};exps.push(x)}
   touchX(x);S.xmode=xSetMode;ls.set(K_SET,S);saveX();scheduleSync();
   hideSheet('xBg');const wasEdit=!!xEdit;xEdit=null;
-  if(!query){const k=mKey(x.at);xMonth=k===mKey(Date.now())?null:k;if(xCat!=='all'&&xCat!==x.c)xCat='all'}
-  if(view!=='money')setView('money');else render();
+  if(!query&&view==='money'){const k=mKey(x.at);xMonth=k===mKey(Date.now())?null:k;if(xCat!=='all'&&xCat!==x.c)xCat='all'}
+  if(view==='cal')calSel=ymd(x.at);if(view!=='money'&&view!=='cal')setView('money');else render();
   toast((wasEdit?'Updated ':'Saved ')+(x.t==='in'?'+':'−')+rs(a)+' · '+c)};
 $('#xDel').onclick=()=>{const x=exps.find(e=>e.id===xEdit);if(!x)return;x.deleted=true;touchX(x);saveX();scheduleSync();hideSheet('xBg');xEdit=null;render();
   toast('Deleted '+rs(x.a),'Undo',()=>{x.deleted=false;touchX(x);saveX();scheduleSync();render()})};
@@ -1302,6 +1306,7 @@ function renderCal(area){
   ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(w=>{const e=document.createElement('div');e.className='wd';e.textContent=w;grid.appendChild(e)});
   const start=new Date(calMonth);start.setDate(1-start.getDay());
   const byDay=new Map();live().filter(matches).forEach(t=>{const ts=t.done?(t.doneAt||t.due):t.due;if(!ts)return;const k=ymd(ts);if(!byDay.has(k))byDay.set(k,[]);byDay.get(k).push(t)});
+  const xDayOut=new Map(),xDayAll=new Map();liveX().forEach(x=>{const k=ymd(x.at);if(!xDayAll.has(k))xDayAll.set(k,[]);xDayAll.get(k).push(x);if(x.t!=='in')xDayOut.set(k,(xDayOut.get(k)||0)+x.a)});
   const todayK=ymd(Date.now());
   for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);if(i===35&&d.getMonth()!==calMonth.getMonth())break;
     const k=ymd(d.getTime()),list=byDay.get(k)||[];
@@ -1309,8 +1314,11 @@ function renderCal(area){
     if(d.getMonth()!==calMonth.getMonth())b.classList.add('out');if(k===todayK)b.classList.add('today');b.setAttribute('aria-pressed',k===calSel);
     const n=document.createElement('span');n.textContent=d.getDate();const dots=document.createElement('span');dots.className='dots';
     list.slice(0,4).forEach(t=>{const x=document.createElement('i');if(t.done)x.className='ok';else if(isLate(t))x.className='late';dots.appendChild(x)});
-    b.append(n,dots);b.setAttribute('aria-label',d.getDate()+', '+pl(list.length));b.onclick=()=>{calSel=k;render()};grid.appendChild(b)}
-  box.append(head,grid);area.appendChild(box);
+    const sp=xDayOut.get(k)||0;const am=document.createElement('span');am.className='amt';am.textContent=sp?shortRs(sp):'';
+    b.append(n,dots,am);b.setAttribute('aria-label',d.getDate()+', '+pl(list.length)+(sp?', spent '+rs(sp):''));b.onclick=()=>{calSel=k;render()};grid.appendChild(b)}
+  const mk0=ymd(calMonth.getTime()).slice(0,7);let mSpent=0;xDayOut.forEach((v,k)=>{if(k.slice(0,7)===mk0)mSpent+=v});
+  const cs=document.createElement('div');cs.className='calsum';if(mSpent){cs.append('Spent this month: ');const bb=document.createElement('b');bb.textContent=rs(mSpent);cs.appendChild(bb)}
+  box.append(head,grid);if(mSpent)box.appendChild(cs);area.appendChild(box);
   const items=(byDay.get(calSel)||[]).sort((a,b)=>(a.done-b.done)||sortT(a,b));
   const g=document.createElement('div');g.className='group-h';const sp=document.createElement('span');
   sp.textContent=new Date(calSel+'T00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})+' · '+pl(items.length);g.appendChild(sp);
@@ -1318,7 +1326,15 @@ function renderCal(area){
   ab.onclick=()=>openAdd(calSel);ga.appendChild(ab);g.appendChild(ga);area.appendChild(g);
   if(items.length){const lb=document.createElement('div');lb.className='list';items.forEach(t=>lb.appendChild(rowEl(t)));area.appendChild(lb)}
   else{const e=document.createElement('div');e.className='empty';e.textContent='No tasks on this day.';area.appendChild(e)}
+  // expenses of the chosen day
+  const xs=(xDayAll.get(calSel)||[]).sort((a,b)=>b.at-a.at);const tot=Math.round((xDayOut.get(calSel)||0)*100)/100;
+  const xg=document.createElement('div');xg.className='group-h';const xsp=document.createElement('span');
+  xsp.textContent='Expenses'+(tot?' · −'+rs(tot):'');xg.appendChild(xsp);
+  const xga=document.createElement('div');xga.className='gact';const xb=document.createElement('button');xb.textContent='+ Expense';xb.onclick=()=>openX(null,calSel);xga.appendChild(xb);xg.appendChild(xga);area.appendChild(xg);
+  if(xs.length){const card=document.createElement('div');card.className='card';xs.forEach(x=>card.appendChild(xRow(x)));area.appendChild(card)}
+  else{const e=document.createElement('div');e.className='empty';e.style.padding='14px 16px';e.textContent='No expenses on this day.';area.appendChild(e)}
 }
+function shortRs(n){n=Math.round(n);if(n>=1e7)return '₹'+(n/1e7).toFixed(n>=1e8?0:1).replace(/\.0$/,'')+'Cr';if(n>=1e5)return '₹'+(n/1e5).toFixed(n>=1e6?0:1).replace(/\.0$/,'')+'L';if(n>=1e3)return '₹'+(n/1e3).toFixed(n>=1e4?0:1).replace(/\.0$/,'')+'k';return '₹'+n}
 
 /* ---------- focus timer ---------- */
 let fT=null,fEnd=0,fLeft=0,fMin=25,fTask=null,fPaused=false;
