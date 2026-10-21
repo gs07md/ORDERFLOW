@@ -257,6 +257,22 @@ h1{font-weight:700;font-size:30px;line-height:1.1;margin:0;letter-spacing:-.01em
 .lsub{font-size:12.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 2px}
 .lnote{width:100%;min-height:45vh;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:12px;font-size:16px;line-height:1.45;resize:vertical}
 
+/* calendar events (Google / phone calendar) */
+.evcard{background:var(--surface);box-shadow:var(--shadow);border-radius:16px;overflow:hidden}
+.ev{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 14px 10px 0}
+.ev+.ev{border-top:1px solid var(--line)}
+.ev i{display:block;align-self:stretch;border-radius:0 3px 3px 0}
+.ev .et{font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.ev .em2{font-size:12.5px;color:var(--muted)}
+.ev .ew{font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+.calgrid .dots i.ev2{background:var(--p3)}
+.calpick{display:flex;flex-direction:column;gap:6px}
+.calpick button{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 12px;text-align:left;color:var(--ink);font:inherit}
+.calpick button[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-soft)}
+.calpick b{display:block;font-size:14.5px}
+.calpick small{color:var(--muted);font-size:12.5px}
+.calpick i{width:12px;height:12px;border-radius:50%;flex:0 0 12px}
+
 /* sheets */
 .sheet-bg{position:fixed;inset:0 0 var(--kb,0px) 0;background:var(--shade);display:flex;align-items:flex-end;justify-content:center;z-index:20}
 .sheet{background:var(--surface);width:100%;max-width:560px;border-radius:20px 20px 0 0;
@@ -478,6 +494,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <div class="field"><label for="eCat">📁 Category</label><select id="eCat"></select></div>
     </div>
     <div class="field"><span class="lbl">⚑ Priority</span>
+      <div class="seg" id="ePinSeg" style="margin-bottom:6px"><button type="button" id="ePin">📌 Pin to top of Today</button></div>
       <div class="seg" id="ePrio">
         <button type="button" data-p="1" style="color:var(--p1)">Urgent</button>
         <button type="button" data-p="2" style="color:var(--p2)">High</button>
@@ -590,6 +607,15 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     </div>
     <div class="field"><label for="vol">Volume</label><input type="range" id="vol" min="0.1" max="1" step="0.05"></div>
     <div class="srow"><button class="chip2" id="soundBtn"><span class="dot"></span><span>Turn sound on</span></button><button class="chip2" id="wakeBtn"><span class="dot"></span><span>Keep screen on</span></button></div>
+
+    <div id="gcalBox" hidden style="display:flex;flex-direction:column;gap:8px">
+      <h3>Google Calendar</h3>
+      <div class="hint">Your tasks with a date show in Google Calendar, and your calendar events show here in Today and Calendar.</div>
+      <div class="status" id="gcalStatus">Not linked</div>
+      <div class="srow"><button class="btn sm primary" id="gcalConnect">Link Google Calendar</button><button class="btn sm danger" id="gcalOff" hidden>Unlink</button></div>
+      <div class="seg" id="gcalPush" hidden><button type="button" data-v="1">Tasks → Calendar: On</button><button type="button" data-v="0">Off (only show events)</button></div>
+      <div class="calpick" id="gcalList" hidden></div>
+    </div>
 
     <h3>Your devices</h3>
     <div class="hint">Open this link on any phone or computer and enter your PIN. Every device shows the same tasks.</div>
@@ -841,7 +867,10 @@ function render(){
   if(query)list.sort((a,b)=>(a.done-b.done)||sortT(a,b));
   else if(view==='done')list.sort((a,b)=>b.doneAt-a.doneAt);else list.sort(sortT);
   if(view==='done'&&!query)list=list.slice(0,150);
-  if(!list.length){
+  let pins=[];
+  if(view==='today'&&!query){pins=L.filter(t=>t.pin&&!t.done&&matches(t)).sort(sortT);const ps=new Set(pins);list=list.filter(t=>!ps.has(t));
+    if(pins.length)section(area,'📌 Pinned',pins);renderEvents(area,startToday(),startToday()+864e5,'From your calendar')}
+  if(!list.length){if(pins.length)return;
     const msg=query?['🔍','Nothing found','Try another word.']:{today:['☀️','All done for today!','Tap ➕ below to add a task.'],upcoming:['🗓','Nothing upcoming','Tap ➕ and pick "Tomorrow" or any date.'],done:['✅','Nothing done yet','Tap the circle on a task, or swipe it right.']}[view];
     const e=document.createElement('div');e.className='empty';const big=document.createElement('div');big.className='big';big.textContent=msg[0];const b=document.createElement('b');b.textContent=msg[1];e.append(big,b,msg[2]);area.appendChild(e);return;
   }
@@ -883,6 +912,7 @@ function rowEl(t){
   if(t.who)add('👤 '+t.who,'who');
   if(t.cat)add('📁 '+t.cat);
   if(t.repeat&&t.repeat!=='none')add('🔁 '+repTxt[t.repeat]);
+  if(t.pin&&!t.done)add('📌 Pinned');
   if(t.items&&t.items.length)add('☑ '+t.items.filter(i=>i.d).length+'/'+t.items.length);
   if(t.ex)add('example','ex');
   const tp=taskPhone(t);
@@ -1324,6 +1354,39 @@ $('#lsName').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const a=$('#ls
 $('#lsClose').onclick=()=>{hideSheet('lsBg');closeList()};$('#lsBg').onclick=e=>{if(e.target.id==='lsBg'){hideSheet('lsBg');closeList()}};
 $('#listsBtn').onclick=()=>{if(query){query='';$('#searchIn').value=''}setView(view==='lists'?'today':'lists')};
 
+/* ---------- Google / phone calendar ---------- */
+let calEvents=[],calFrom=0,calTo=0,calAt=0,calBusy=false;
+const calOn=()=>!!(Native&&S.calId&&typeof Native.calEvents==='function');
+function eventsOn(a,b){if(!calOn())return[];return calEvents.filter(e=>e.allDay?(e.day&&new Date(e.day+'T00:00').getTime()<b&&new Date((e.endDay||e.day)+'T00:00').getTime()>=a):(e.begin<b&&e.end>a))}
+async function needEvents(from,to,force){if(!calOn()||calBusy)return;const f=Math.min(from,startToday()-35*864e5),t=Math.max(to,startToday()+65*864e5);
+  if(!force&&calAt&&Date.now()-calAt<5*60e3&&f>=calFrom&&t<=calTo)return;calBusy=true;
+  try{const r=await Native.calEvents({from:f,to:t});calEvents=(r&&r.events)||[];calFrom=f;calTo=t;if(r&&r.granted===false){S.calId=null;ls.set(K_SET,S)}}catch(e){calFrom=f;calTo=t}
+  calAt=Date.now();
+  calBusy=false;if(view==='today'||view==='cal')render()}
+function renderEvents(area,a,b,label){if(!calOn())return;needEvents(a,b);const ev=eventsOn(a,b).sort((x,y)=>(y.allDay-x.allDay)||x.begin-y.begin);if(!ev.length)return;
+  const sec=el('div','sec');const h=el('div','sec-h');const sp=el('span',null,'📅 '+label);sp.appendChild(el('span','cnt',ev.length));h.appendChild(sp);sec.appendChild(h);
+  const card=el('div','evcard');ev.slice(0,30).forEach(e=>{const r=el('div','ev');const bar=el('i');bar.style.background=e.color||'var(--p3)';
+    const mid=el('div');mid.append(el('div','et',e.title));const sub=[e.cal,e.where].filter(Boolean).join(' · ');if(sub)mid.appendChild(el('div','em2',sub));
+    r.append(bar,mid,el('div','ew',e.allDay?'All day':hm(e.begin)+(e.end-e.begin>=36e5?' – '+hm(e.end):'')));card.appendChild(r)});
+  sec.appendChild(card);area.appendChild(sec)}
+function calTasks(){const st=startToday()-864e5,lim=Date.now()+60*864e5;
+  return live().filter(t=>!t.done&&t.due&&t.due>=st&&t.due<lim&&mineOk(t)).sort(sortT).slice(0,300)
+    .map(t=>({id:t.id,title:String(t.title).slice(0,120),start:t.due,allDay:!!t.allDay,note:[t.cat,t.note].filter(Boolean).join(' · ').slice(0,300)}))}
+function calPush(){if(!calOn()||typeof Native.calSync!=='function')return;Native.calSync({calId:+S.calId,tasks:S.calPush===0?[]:calTasks()}).catch(()=>{})}
+function paintCalSettings(){const box=$('#gcalBox');if(!box)return;box.hidden=!Native;if(!Native)return;
+  $('#gcalStatus').className='status'+(S.calId?' good':'');$('#gcalStatus').textContent=S.calId?'✓ Linked to '+(S.calName||'your calendar'):'Not linked';
+  $('#gcalConnect').textContent=S.calId?'Change calendar':'Link Google Calendar';$('#gcalOff').hidden=!S.calId;$('#gcalPush').hidden=!S.calId;
+  $$('#gcalPush button').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='1')===(S.calPush!==0)))}
+async function pickCalendar(){if(!Native||typeof Native.calCalendars!=='function'){toast('Update the app to use this');return}
+  let r;try{r=await Native.calCalendars()}catch(e){toast('Could not open your calendars');return}
+  if(!r||!r.granted){toast('Allow Calendar permission to link it');return}
+  const cals=(r.calendars||[]).sort((a,b)=>(/google/i.test(b.type)-/google/i.test(a.type))||(b.primary-a.primary));const box=$('#gcalList');box.innerHTML='';box.hidden=false;
+  if(!cals.length){box.appendChild(el('div','hint','No calendar found. Add your Google account in phone Settings → Accounts first.'));return}
+  box.appendChild(el('div','lbl','Choose where your tasks should appear:'));
+  cals.forEach(c=>{const b=el('button');b.type='button';b.setAttribute('aria-pressed',String(c.id)===String(S.calId));const dot=el('i');dot.style.background=c.color;
+    const t=el('div');t.append(el('b',null,c.name||c.account),el('small',null,c.account+(/google/i.test(c.type)?' · Google':'')));b.append(dot,t);
+    b.onclick=()=>{S.calId=c.id;S.calName=(c.name&&c.name!==c.account?c.name+' · ':'')+c.account;saveS();box.hidden=true;paintCalSettings();calPush();needEvents(0,0,true);toast('Google Calendar linked ✓')};box.appendChild(b)})}
+
 /* ---------- voice input ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(SR){$('#micBtn').hidden=false;let rec=null;
@@ -1362,6 +1425,7 @@ function openEdit(id){const t=tasks.find(x=>x.id===id);if(!t)return;editId=id;fi
   $('#eRepeat').value=t.repeat||'none';$('#eCat').value=t.cat||'';$('#eWho').value=t.who||'';$('#eTone').value=t.tone||'';$('#eNote').value=t.note||'';setPrio(t.prio);
   if(t.who&&$('#eWho').value!==t.who){const o=document.createElement('option');o.value=o.textContent=t.who;$('#eWho').appendChild(o);$('#eWho').value=t.who}
   editItems=(t.items||[]).map(i=>({...i}));renderItems();$('#eItemNew').value='';$('#editForm details').open=!!(t.who||t.tone);
+  ePin=!!t.pin;$('#ePin').setAttribute('aria-pressed',ePin);
   $('#eCname').value=t.cname||'';$('#ePhone').value=t.phone||'';setEAct(t.act||'');$('#eMsg').value=t.msg||'';$('#ePick').hidden=!Native;
   showSheet('editBg')}
 function closeEdit(){hideSheet('editBg');editId=null}
@@ -1376,12 +1440,13 @@ $('#editForm').onsubmit=e=>{e.preventDefault();const t=tasks.find(x=>x.id===edit
   t.title=$('#eTitle').value.trim()||t.title;
   const dv=$('#eDate').value,tv=$('#eTime').value;
   if(dv||tv){const d=dv?new Date(dv+'T00:00'):new Date();if(tv){const[h,m]=tv.split(':');d.setHours(+h,+m,0,0)}const nd=d.getTime();if(nd!==t.due||t.allDay!==!tv){t.rung=false;t.preRung=false;t.ack=null}t.due=nd;t.allDay=!tv}else{t.due=null;t.allDay=false}
-  t.repeat=$('#eRepeat').value;t.cat=$('#eCat').value;t.who=$('#eWho').value;t.tone=$('#eTone').value;t.note=$('#eNote').value.trim();t.prio=editPrio;t.ex=false;
+  t.repeat=$('#eRepeat').value;t.cat=$('#eCat').value;t.who=$('#eWho').value;t.tone=$('#eTone').value;t.note=$('#eNote').value.trim();t.prio=editPrio;t.ex=false;t.pin=ePin;
   t.items=editItems.filter(i=>i.t.trim()).map(i=>({t:i.t.trim(),d:!!i.d}));
   t.cname=$('#eCname').value.trim().slice(0,40);t.phone=digits10($('#ePhone').value);t.act=eAct;t.msg=eAct==='wa'?$('#eMsg').value.trim().slice(0,500):'';
   if($('#ePhone').value.trim()&&!t.phone)toast('Mobile number needs 10 digits');
   touch(t);save();closeEdit();render();toast('Saved')};
-let eAct='';
+let eAct='',ePin=false;
+$('#ePin').onclick=()=>{ePin=!ePin;$('#ePin').setAttribute('aria-pressed',ePin)};
 function setEAct(a){eAct=a;$$('#eAct button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.a===a));$('#eMsg').hidden=a!=='wa'}
 $('#eAct').onclick=e=>{const b=e.target.closest('button');if(b)setEAct(b.dataset.a)};
 $('#ePick').onclick=()=>pickContact(c=>{$('#eCname').value=c.name;$('#ePhone').value=c.phone;if(!eAct)setEAct('call')});
@@ -1515,6 +1580,7 @@ function renderCal(area){
     if(d.getMonth()!==calMonth.getMonth())b.classList.add('out');if(k===todayK)b.classList.add('today');b.setAttribute('aria-pressed',k===calSel);
     const n=document.createElement('span');n.textContent=d.getDate();const dots=document.createElement('span');dots.className='dots';
     list.slice(0,4).forEach(t=>{const x=document.createElement('i');if(t.done)x.className='ok';else if(isLate(t))x.className='late';dots.appendChild(x)});
+    if(list.length<4&&eventsOn(d.getTime(),d.getTime()+864e5).length){const x=document.createElement('i');x.className='ev2';dots.appendChild(x)}
     const sp=xDayOut.get(k)||0;const am=document.createElement('span');am.className='amt';am.textContent=sp?shortRs(sp):'';
     b.append(n,dots,am);b.setAttribute('aria-label',d.getDate()+', '+pl(list.length)+(sp?', spent '+rs(sp):''));b.onclick=()=>{calSel=k;render()};grid.appendChild(b)}
   const mk0=ymd(calMonth.getTime()).slice(0,7);let mSpent=0;xDayOut.forEach((v,k)=>{if(k.slice(0,7)===mk0)mSpent+=v});
@@ -1527,6 +1593,7 @@ function renderCal(area){
   ab.onclick=()=>openAdd(calSel);ga.appendChild(ab);g.appendChild(ga);area.appendChild(g);
   if(items.length){const lb=document.createElement('div');lb.className='list';items.forEach(t=>lb.appendChild(rowEl(t)));area.appendChild(lb)}
   else{const e=document.createElement('div');e.className='empty';e.textContent='No tasks on this day.';area.appendChild(e)}
+  {const ds=new Date(calSel+'T00:00').getTime();renderEvents(area,ds,ds+864e5,'From your calendar');needEvents(new Date(calMonth).getTime()-7*864e5,new Date(calMonth.getFullYear(),calMonth.getMonth()+1,8).getTime())}
   // expenses of the chosen day
   const xs=(xDayAll.get(calSel)||[]).sort((a,b)=>b.at-a.at);const tot=Math.round((xDayOut.get(calSel)||0)*100)/100;
   const xg=document.createElement('div');xg.className='group-h';const xsp=document.createElement('span');
@@ -1572,10 +1639,13 @@ $('#voiceLang').onchange=e=>{S.voice=e.target.value;saveS()};
 $('#catsIn').onchange=e=>{const c=e.target.value.split(',').map(s=>s.trim()).filter(Boolean);if(c.length){S.cats=[...new Set(c)];saveS();renderCats()}};
 $('#myName').onchange=e=>{S.name=e.target.value.trim().slice(0,30);saveS();renderCats()};
 $('#people').onchange=e=>{S.people=[...new Set(e.target.value.split(',').map(s=>s.trim().slice(0,30)).filter(Boolean))];saveS();renderCats()};
-function openSettings(){renderTones();$('#vol').value=S.vol;$('#summaryT').value=S.summary||'';$('#voiceLang').value=S.voice;$('#catsIn').value=S.cats.join(', ');
+function openSettings(){paintCalSettings();renderTones();$('#vol').value=S.vol;$('#summaryT').value=S.summary||'';$('#voiceLang').value=S.voice;$('#catsIn').value=S.cats.join(', ');
   $('#myName').value=S.name||'';$('#people').value=(S.people||[]).join(', ');
   if(S.customName)$('#customName').textContent=S.customName;updateWa();updateCode();refreshPush();showSheet('setBg')}
 $('#setBtn').onclick=openSettings;
+$('#gcalConnect').onclick=pickCalendar;
+$('#gcalOff').onclick=()=>{if(Native&&typeof Native.calSync==='function')Native.calSync({calId:-1,tasks:[]}).catch(()=>{});S.calId=null;S.calName='';saveS();calEvents=[];calAt=0;$('#gcalList').hidden=true;paintCalSettings();render();toast('Calendar unlinked — tasks removed from it')};
+$('#gcalPush').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.calPush=b.dataset.v==='1'?1:0;saveS();paintCalSettings();calPush()};
 $('#setClose').onclick=()=>{stopTone();hideSheet('setBg')};
 $('#setBg').onclick=e=>{if(e.target.id==='setBg'){stopTone();hideSheet('setBg')}};
 function applyTheme(){const r=document.documentElement;if(S.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',S.theme)}
@@ -1748,7 +1818,7 @@ function nativeSync(){if(!Native)return;const now=Date.now();const alarms=[];
       alarms.push({id:t.id+'@'+at,taskId:t.id,at,title:t.title,body:[t.cat,t.note].filter(Boolean).join(' · ').slice(0,200),
         phone:tp?'+91'+tp:'',cname:t.cname||'',act:tp?(t.act||''):'',msg:t.msg||'',prio:t.prio||4})})});
   alarms.sort((a,b)=>a.at-b.at);
-  Native.sync({alarms:alarms.slice(0,200),ringMins:S.ringMins||3,vibrate:!!S.vib}).catch(e=>console.log('alarm sync failed',e));nativeWidget()}
+  Native.sync({alarms:alarms.slice(0,200),ringMins:S.ringMins||3,vibrate:!!S.vib}).catch(e=>console.log('alarm sync failed',e));nativeWidget();calPush()}
 // home-screen widget: open tasks for the next few days (it shows today's) and recent spending
 function nativeWidget(){if(!Native||typeof Native.widget!=='function')return;const st=startToday(),lim=st+3*864e5;
   const tk=live().filter(t=>!t.done&&t.due&&t.due<lim&&mineOk(t)).sort(sortT).slice(0,40).map(t=>({id:t.id,at:t.due,title:String(t.title).slice(0,80),allDay:!!t.allDay}));
@@ -1761,8 +1831,9 @@ function nativeWidget(){if(!Native||typeof Native.widget!=='function')return;con
   Native.widget({tasks:tk,exps:ex,doneToday,day:k,habits:hb,hday:k,list,mexps:mex}).catch(()=>{})}
 async function nativeActions(){if(!Native)return;let r;try{r=await Native.takeActions()}catch(e){return}
   const acts=(r&&r.actions)||[];if(!acts.length)return;let wOpen='';
-  let hch=false,lch=false;
+  let hch=false,lch=false,shared='';
   acts.forEach(a=>{if(a.action==='widget'){wOpen=a.what;return}
+    if(a.action==='share'){shared=String(a.text||'');return}
     if(a.action==='habit'){const h=habits.find(x=>x.id===a.id);if(h&&!h.deleted&&a.day){h.log=h.log||{};if(a.on)h.log[a.day]=1;else delete h.log[a.day];touchD(h);hch=true}return}
     if(a.action==='item'){const l=lists.find(x=>x.id===a.list);const i=l&&(l.items||[]).find(x=>x.id===a.item);if(i&&!i.d){i.d=true;touchD(l);lch=true}return}
     const t=tasks.find(x=>x.id===a.taskId);if(!t||t.done||t.deleted)return;
@@ -1771,6 +1842,7 @@ async function nativeActions(){if(!Native)return;let r;try{r=await Native.takeAc
     else if(a.action==='stop'){t.ack=t.due;saveLocal()}});
   if(hch)saveH();if(lch)saveL();
   save();render();
+  if(shared){if(view==='money'||view==='lists')setView('today');openAdd();const q=$('#quick');q.value=shared.replace(/\s+/g,' ').trim().slice(0,200);if(q.oninput)q.oninput();setTimeout(()=>{q.focus();try{q.setSelectionRange(q.value.length,q.value.length)}catch(e){}},120);return}
   if(wOpen==='habits'){setView('today');if(!liveH().length)openHabit(null)}else if(wOpen==='lists'||wOpen==='money'){setView(wOpen)}
   else if(wOpen.startsWith('list:')){setView('lists');const id=wOpen.slice(5);if(lists.some(x=>x.id===id&&!x.deleted))openList(id)}
   else if(wOpen==='add'){if(view==='money')setView('today');openAdd()}else if(wOpen==='addx'){if(view!=='money'&&view!=='cal')setView('money');openX()}}
@@ -1781,7 +1853,7 @@ if(Native){
   $('#nativeToneBtn').onclick=()=>Native.pickRingtone().then(r=>{if(r&&r.title){$('#nativeTone').textContent=r.title;toast('Alarm sound: '+r.title)}}).catch(()=>{});
   $('#nativePerm').onclick=()=>Native.ensurePermissions().then(()=>setTimeout(nativeSettings,800)).catch(()=>{});
   $('#nativeTest').onclick=()=>Native.test({seconds:10}).then(()=>toast('Alarm will ring in 10 seconds — you can lock the phone')).catch(()=>toast('Could not set test alarm'));
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){nativeActions();nativeSoon();setTimeout(nativeActions,700)}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){nativeActions();nativeSoon();setTimeout(nativeActions,700);if(calOn())needEvents(0,0,true)}});
   Native.getSettings().then(r=>{if(r&&!(r.canExact&&r.notifications))Native.ensurePermissions().catch(()=>{})}).catch(()=>{});
 }
 

@@ -22,11 +22,14 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
+import com.getcapacitor.PermissionState;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** Bridge from the web app: alarms, ringtone, contacts, calls and WhatsApp. */
-@CapacitorPlugin(name = "TodoAlarm")
+@CapacitorPlugin(name = "TodoAlarm", permissions = { @Permission(alias = "calendar", strings = { Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR }) })
 public class TodoAlarmPlugin extends Plugin {
 
     private AlarmStore store() { return new AlarmStore(getContext()); }
@@ -47,6 +50,42 @@ public class TodoAlarmPlugin extends Plugin {
             int n = AlarmScheduler.scheduleAll(getContext());
             JSObject r = new JSObject(); r.put("count", n); call.resolve(r);
         } catch (Exception e) { call.reject("sync failed: " + e.getMessage()); }
+    }
+
+    /** Google / phone calendar: list calendars (asks permission first). */
+    @PluginMethod
+    public void calCalendars(PluginCall call) {
+        if (getPermissionState("calendar") != PermissionState.GRANTED) { requestPermissionForAlias("calendar", call, "calPerm"); return; }
+        JSObject r = new JSObject(); r.put("granted", true);
+        try { r.put("calendars", new JSArray(CalendarSync.calendars(getContext()).toString())); } catch (Exception e) { r.put("calendars", new JSArray()); }
+        call.resolve(r);
+    }
+
+    @PermissionCallback
+    private void calPerm(PluginCall call) {
+        if (getPermissionState("calendar") == PermissionState.GRANTED) calCalendars(call);
+        else { JSObject r = new JSObject(); r.put("granted", false); r.put("calendars", new JSArray()); call.resolve(r); }
+    }
+
+    @PluginMethod
+    public void calSync(PluginCall call) {
+        if (getPermissionState("calendar") != PermissionState.GRANTED) { call.resolve(new JSObject().put("count", -1)); return; }
+        final long calId = call.getLong("calId", -1L);
+        final JSArray tasks = call.getArray("tasks", new JSArray());
+        new Thread(() -> {
+            int n = CalendarSync.sync(getContext(), calId, tasks);
+            JSObject r = new JSObject(); r.put("count", n); call.resolve(r);
+        }).start();
+    }
+
+    @PluginMethod
+    public void calEvents(PluginCall call) {
+        if (getPermissionState("calendar") != PermissionState.GRANTED) { JSObject r = new JSObject(); r.put("events", new JSArray()); r.put("granted", false); call.resolve(r); return; }
+        long from = call.getLong("from", System.currentTimeMillis() - 86400000L * 40), to = call.getLong("to", System.currentTimeMillis() + 86400000L * 70);
+        JSObject r = new JSObject();
+        try { r.put("events", new JSArray(CalendarSync.events(getContext(), from, to).toString())); } catch (Exception e) { r.put("events", new JSArray()); }
+        r.put("granted", true);
+        call.resolve(r);
     }
 
     /** Data for the home-screen widget: today's open tasks and today's spend. */
