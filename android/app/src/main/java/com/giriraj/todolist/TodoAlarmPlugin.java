@@ -53,12 +53,7 @@ public class TodoAlarmPlugin extends Plugin {
     @PluginMethod
     public void widget(PluginCall call) {
         try {
-            JSObject d = new JSObject();
-            d.put("tasks", call.getArray("tasks", new JSArray()));
-            d.put("exps", call.getArray("exps", new JSArray()));
-            d.put("doneToday", call.getInt("doneToday", 0));
-            d.put("day", call.getString("day", ""));
-            TodoWidget.save(getContext(), d.toString());
+            TodoWidget.save(getContext(), call.getData().toString());
             call.resolve();
         } catch (Exception e) { call.reject("widget failed: " + e.getMessage()); }
     }

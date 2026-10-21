@@ -5,4 +5,7 @@
     <string name="package_name">com.giriraj.todolist</string>
     <string name="custom_url_scheme">com.giriraj.todolist</string>
     <string name="widget_desc">Today\'s tasks and spend. Tick to finish a task.</string>
+    <string name="widget_habits_desc">Today\'s habits. Tap to tick.</string>
+    <string name="widget_list_desc">Your shopping list. Tap to tick items.</string>
+    <string name="widget_money_desc">Today\'s and this month\'s spending, with quick add.</string>
 </resources>

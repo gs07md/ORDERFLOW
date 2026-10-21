@@ -42,10 +42,16 @@ public class TodoWidget extends AppWidgetProvider {
         catch (Exception e) { return new JSONObject(); }
     }
 
+    static void store(Context ctx, JSONObject d) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("data", d.toString()).apply();
+    }
+
     static void updateAll(Context ctx) {
         AppWidgetManager m = AppWidgetManager.getInstance(ctx);
-        int[] ids = m.getAppWidgetIds(new ComponentName(ctx, TodoWidget.class));
-        for (int id : ids) m.updateAppWidget(id, build(ctx));
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, TodoWidget.class))) m.updateAppWidget(id, build(ctx));
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, HabitWidget.class))) m.updateAppWidget(id, HabitWidget.build(ctx));
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, ListWidget.class))) m.updateAppWidget(id, ListWidget.build(ctx));
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, MoneyWidget.class))) m.updateAppWidget(id, MoneyWidget.build(ctx));
     }
 
     @Override
@@ -71,7 +77,7 @@ public class TodoWidget extends AppWidgetProvider {
             JSONArray t = d.optJSONArray("tasks"), keep = new JSONArray();
             if (t != null) for (int i = 0; i < t.length(); i++) { JSONObject o = t.optJSONObject(i); if (o != null && !taskId.equals(o.optString("id"))) keep.put(o); }
             try { d.put("tasks", keep); d.put("doneToday", d.optInt("doneToday") + 1); } catch (Exception ignored) { }
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("data", d.toString()).apply();
+            store(ctx, d);
             updateAll(ctx);
         } else if (Intent.ACTION_DATE_CHANGED.equals(a) || Intent.ACTION_TIME_CHANGED.equals(a) || Intent.ACTION_TIMEZONE_CHANGED.equals(a)) {
             updateAll(ctx);

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@drawable/widget_bg"
+    android:paddingStart="12dp" android:paddingEnd="12dp" android:paddingTop="12dp" android:paddingBottom="8dp">
+    <LinearLayout android:id="@+id/l_head" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:paddingStart="4dp">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+            <TextView android:id="@+id/l_title" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="17sp" android:textStyle="bold" android:textColor="@color/w_ink" android:singleLine="true" android:ellipsize="end"/>
+            <TextView android:id="@+id/l_sum" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="12sp" android:textColor="@color/w_muted" android:singleLine="true" android:ellipsize="end"/>
+        </LinearLayout>
+        <TextView android:id="@+id/l_btn" android:layout_width="wrap_content" android:layout_height="34dp" android:gravity="center"
+            android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_btn"
+            android:text="+ Add" android:textSize="13sp" android:textStyle="bold" android:textColor="#FFFFFF" android:contentDescription="Add items"/>
+    </LinearLayout>
+    <FrameLayout android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/w_line" android:layout_marginTop="8dp" android:layout_marginBottom="2dp"/>
+
+    <LinearLayout android:id="@+id/l_row0" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="38dp" android:visibility="gone">
+        <TextView android:id="@+id/l_chk0" android:layout_width="38dp" android:layout_height="38dp" android:gravity="center"
+            android:text="○" android:textSize="22sp" android:textColor="@color/w_accent" android:contentDescription="Tick item"/>
+        <TextView android:id="@+id/l_ttl0" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:singleLine="true" android:ellipsize="end" android:textSize="14sp" android:textColor="@color/w_ink"/>
+        <TextView android:id="@+id/l_tim0" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/w_muted"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/l_row1" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="38dp" android:visibility="gone">
+        <TextView android:id="@+id/l_chk1" android:layout_width="38dp" android:layout_height="38dp" android:gravity="center"
+            android:text="○" android:textSize="22sp" android:textColor="@color/w_accent" android:contentDescription="Tick item"/>
+        <TextView android:id="@+id/l_ttl1" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:singleLine="true" android:ellipsize="end" android:textSize="14sp" android:textColor="@color/w_ink"/>
+        <TextView android:id="@+id/l_tim1" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/w_muted"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/l_row2" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="38dp" android:visibility="gone">
+        <TextView android:id="@+id/l_chk2" android:layout_width="38dp" android:layout_height="38dp" android:gravity="center"
+            android:text="○" android:textSize="22sp" android:textColor="@color/w_accent" android:contentDescription="Tick item"/>
+        <TextView android:id="@+id/l_ttl2" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:singleLine="true" android:ellipsize="end" android:textSize="14sp" android:textColor="@color/w_ink"/>
+        <TextView android:id="@+id/l_tim2" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/w_muted"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/l_row3" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="38dp" android:visibility="gone">
+        <TextView android:id="@+id/l_chk3" android:layout_width="38dp" android:layout_height="38dp" android:gravity="center"
+            android:text="○" android:textSize="22sp" android:textColor="@color/w_accent" android:contentDescription="Tick item"/>
+        <TextView android:id="@+id/l_ttl3" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:singleLine="true" android:ellipsize="end" android:textSize="14sp" android:textColor="@color/w_ink"/>
+        <TextView android:id="@+id/l_tim3" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/w_muted"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/l_row4" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="38dp" android:visibility="gone">
+        <TextView android:id="@+id/l_chk4" android:layout_width="38dp" android:layout_height="38dp" android:gravity="center"
+            android:text="○" android:textSize="22sp" android:textColor="@color/w_accent" android:contentDescription="Tick item"/>
+        <TextView android:id="@+id/l_ttl4" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:singleLine="true" android:ellipsize="end" android:textSize="14sp" android:textColor="@color/w_ink"/>
+        <TextView android:id="@+id/l_tim4" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/w_muted"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/l_row5" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="38dp" android:visibility="gone">
+        <TextView android:id="@+id/l_chk5" android:layout_width="38dp" android:layout_height="38dp" android:gravity="center"
+            android:text="○" android:textSize="22sp" android:textColor="@color/w_accent" android:contentDescription="Tick item"/>
+        <TextView android:id="@+id/l_ttl5" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:singleLine="true" android:ellipsize="end" android:textSize="14sp" android:textColor="@color/w_ink"/>
+        <TextView android:id="@+id/l_tim5" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/w_muted"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/l_row6" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="38dp" android:visibility="gone">
+        <TextView android:id="@+id/l_chk6" android:layout_width="38dp" android:layout_height="38dp" android:gravity="center"
+            android:text="○" android:textSize="22sp" android:textColor="@color/w_accent" android:contentDescription="Tick item"/>
+        <TextView android:id="@+id/l_ttl6" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:singleLine="true" android:ellipsize="end" android:textSize="14sp" android:textColor="@color/w_ink"/>
+        <TextView android:id="@+id/l_tim6" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/w_muted"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/l_row7" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="38dp" android:visibility="gone">
+        <TextView android:id="@+id/l_chk7" android:layout_width="38dp" android:layout_height="38dp" android:gravity="center"
+            android:text="○" android:textSize="22sp" android:textColor="@color/w_accent" android:contentDescription="Tick item"/>
+        <TextView android:id="@+id/l_ttl7" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:singleLine="true" android:ellipsize="end" android:textSize="14sp" android:textColor="@color/w_ink"/>
+        <TextView android:id="@+id/l_tim7" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/w_muted"/>
+    </LinearLayout>
+    <TextView android:id="@+id/l_empty" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:gravity="center" android:textSize="14sp" android:textColor="@color/w_muted" android:visibility="gone"/>
+    <TextView android:id="@+id/l_more" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:paddingStart="42dp" android:paddingTop="2dp" android:textSize="12.5sp" android:textStyle="bold"
+        android:textColor="@color/w_accent" android:visibility="gone"/>
+</LinearLayout>
