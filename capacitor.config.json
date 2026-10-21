@@ -3,9 +3,10 @@
   "appName": "To Do List",
   "webDir": "www",
   "server": {
-    "url": "https://giriraj-aaj-nu-kaam.netlify.app",
-    "androidScheme": "https",
-    "errorPath": "offline.html"
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
   },
   "android": {
     "allowMixedContent": false
