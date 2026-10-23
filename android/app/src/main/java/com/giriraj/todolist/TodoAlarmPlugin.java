@@ -29,7 +29,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** Bridge from the web app: alarms, ringtone, contacts, calls and WhatsApp. */
-@CapacitorPlugin(name = "TodoAlarm", permissions = { @Permission(alias = "calendar", strings = { Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR }) })
+@CapacitorPlugin(name = "TodoAlarm", permissions = { @Permission(alias = "calendar", strings = { Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR }), @Permission(alias = "sms", strings = { Manifest.permission.READ_SMS }) })
 public class TodoAlarmPlugin extends Plugin {
 
     private AlarmStore store() { return new AlarmStore(getContext()); }
@@ -50,6 +50,25 @@ public class TodoAlarmPlugin extends Plugin {
             int n = AlarmScheduler.scheduleAll(getContext());
             JSObject r = new JSObject(); r.put("count", n); call.resolve(r);
         } catch (Exception e) { call.reject("sync failed: " + e.getMessage()); }
+    }
+
+    /** Bank alert SMS since a time (asks permission first). Nothing leaves the phone from here. */
+    @PluginMethod
+    public void smsRead(PluginCall call) {
+        if (getPermissionState("sms") != PermissionState.GRANTED) { requestPermissionForAlias("sms", call, "smsPerm"); return; }
+        final long since = call.getLong("since", System.currentTimeMillis() - 86400000L * 30);
+        final int max = call.getInt("max", 300);
+        new Thread(() -> {
+            JSObject r = new JSObject(); r.put("granted", true);
+            try { r.put("messages", new JSArray(BankSms.read(getContext(), since, max).toString())); } catch (Exception e) { r.put("messages", new JSArray()); }
+            call.resolve(r);
+        }).start();
+    }
+
+    @PermissionCallback
+    private void smsPerm(PluginCall call) {
+        if (getPermissionState("sms") == PermissionState.GRANTED) smsRead(call);
+        else { JSObject r = new JSObject(); r.put("granted", false); r.put("messages", new JSArray()); call.resolve(r); }
     }
 
     /** Google / phone calendar: list calendars (asks permission first). */

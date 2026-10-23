@@ -299,6 +299,19 @@ h1{font-weight:700;font-size:30px;line-height:1.1;margin:0;letter-spacing:-.01em
 .xfixed button small{color:var(--muted)}
 .xshare{align-self:flex-end}
 
+/* bank SMS review */
+.smsbox{background:var(--surface);box-shadow:var(--shadow);border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;border:1.5px solid var(--accent)}
+.smsbox .sh{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:14.5px;padding-bottom:4px}
+.smsbox .sh small{color:var(--muted);font-weight:500}
+.srw{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.srw .w{font-size:14.5px;font-weight:600;overflow-wrap:anywhere}
+.srw .d{font-size:12px;color:var(--muted)}
+.srw .d b{color:var(--p2);font-weight:600}
+.srw .am{font-weight:700;font-size:14.5px;white-space:nowrap}
+.srw .am.in{color:var(--ok)}
+.srw button{border:1px solid var(--line);background:var(--bg);border-radius:10px;height:34px;min-width:38px;padding:0 10px;font-weight:700;color:var(--ink)}
+.srw button.ok{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
 /* sheets */
 .sheet-bg{position:fixed;inset:0 0 var(--kb,0px) 0;background:var(--shade);display:flex;align-items:flex-end;justify-content:center;z-index:20}
 .sheet{background:var(--surface);width:100%;max-width:560px;border-radius:20px 20px 0 0;
@@ -635,6 +648,17 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     </div>
     <div class="field"><label for="vol">Volume</label><input type="range" id="vol" min="0.1" max="1" step="0.05"></div>
     <div class="srow"><button class="chip2" id="soundBtn"><span class="dot"></span><span>Turn sound on</span></button><button class="chip2" id="wakeBtn"><span class="dot"></span><span>Keep screen on</span></button></div>
+
+    <div id="smsBox" hidden style="display:flex;flex-direction:column;gap:8px">
+      <h3>Bank SMS → Expenses</h3>
+      <div class="hint">Reads your bank's payment SMS (UPI, card, ATM) on this phone and turns them into expenses. Messages stay on your phone — only the expenses you add are saved.</div>
+      <div class="status" id="smsStatus">Off</div>
+      <div class="srow"><button class="btn sm primary" id="smsOn">Turn on</button><button class="btn sm" id="smsNow" hidden>Check now</button><button class="btn sm danger" id="smsOff" hidden>Turn off</button></div>
+      <div id="smsOpts" hidden style="display:flex;flex-direction:column;gap:6px">
+        <div class="seg" id="smsAutoSeg"><button type="button" data-v="0">Ask me first</button><button type="button" data-v="1">Add automatically</button></div>
+        <div class="seg" id="smsInSeg"><button type="button" data-v="0">Only spends</button><button type="button" data-v="1">Spends + money received</button></div>
+      </div>
+    </div>
 
     <div id="gcalBox" hidden style="display:flex;flex-direction:column;gap:8px">
       <h3>Google Calendar</h3>
@@ -1126,8 +1150,8 @@ function setView(v){view=v;xBudgetEdit=false;$$('#nav button').forEach(b=>b.setA
 $('#nav').onclick=e=>{const b=e.target.closest('button');if(b){if(query){query='';$('#searchIn').value=''}setView(b.dataset.v)}};
 
 /* ---------- expenses ---------- */
-const XCATS=['Food','Fuel','Shop','Stock','Bills','Rent','Salary','Travel','Personal','Health','Home','Sale','Payment','Other'];
-const XIC={Food:'🍽',Fuel:'⛽',Shop:'🏪',Stock:'📦',Bills:'💡',Rent:'🏠',Salary:'👷',Travel:'🚌',Personal:'🛍',Shopping:'🛍',Health:'💊',Home:'🏡',Sale:'🧾',Payment:'💰',Other:'💸'};
+const XCATS=['Food','Fuel','Shopping','Bills','Rent','Travel','Health','Home','Personal','Shop','Stock','Salary','Sale','Payment','Other'];
+const XIC={Food:'🍽',Fuel:'⛽',Shop:'🏪',Stock:'📦',Bills:'💡',Rent:'🏠',Salary:'👷',Travel:'🚌',Personal:'🙂',Shopping:'🛍',Health:'💊',Home:'🏡',Sale:'🧾',Payment:'💰',Other:'💸'};
 const XMODE={cash:'Cash',upi:'UPI',card:'Card',bank:'Bank'};
 // whole-word match that also works for Gujarati (\b does not)
 const GW=(w,tail='')=>new RegExp('(?:^|[\\s,.;:/()+\\-])(?:'+w+')(?=$|[\\s,.;:/()+\\-])'+tail,'i');
@@ -1169,7 +1193,7 @@ function xDay(ts){return new Date(ts).getFullYear()===new Date().getFullYear()?d
 function xMatches(x){if(!query)return true;const q=query.toLowerCase().replace(/[,₹\s]/g,'');
   const hay=(x.n+' '+x.c+' '+XMODE[x.m]+' '+(x.t==='in'?'received':'spent')+' '+x.a+' '+x.a.toFixed(2)).toLowerCase().replace(/[,\s]/g,'');return hay.includes(q)}
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
-function renderMoney(area){
+function renderMoney(area){renderSmsBox(area);
   const mk=curMonth();
   const[Y,M]=mk.split('-').map(Number);const ms=new Date(Y,M-1,1).getTime(),me=new Date(Y,M,1).getTime();
   const L=liveX();const inM=L.filter(x=>x.at>=ms&&x.at<me);
@@ -1460,6 +1484,80 @@ async function pickCalendar(){if(!Native||typeof Native.calCalendars!=='function
     const t=el('div');t.append(el('b',null,c.name||c.account),el('small',null,c.account+(/google/i.test(c.type)?' · Google':'')));b.append(dot,t);
     b.onclick=()=>{S.calId=c.id;S.calName=(c.name&&c.name!==c.account?c.name+' · ':'')+c.account;saveS();box.hidden=true;paintCalSettings();calPush();needEvents(0,0,true);toast('Google Calendar linked ✓')};box.appendChild(b)})}
 
+/* ---------- bank SMS -> expenses ---------- */
+// Bank / UPI SMS -> {a, t:'out'|'in', who, mode, bank}
+function parseBankSms(body,sender){
+  const s=String(body||'').replace(/\s+/g,' ').trim();const low=s.toLowerCase();
+  if(!s||/\b(otp|one time password|verification code)\b/.test(low))return null;
+  if(/\b(will be|to be|is due|due on|due date|requested|request(ed)? for|failed|declined|unsuccessful|reversed|could not|has been blocked|min(imum)? amt|minimum amount|statement|e-?mandate|autopay (is )?set|pre-?approved|offer|cashback offer|win|loan of)\b/.test(low)&&!/\b(debited|spent)\b.*\b(refund|reversed)\b/.test(low))return null;
+  const deb=/\b(debited|debit(ed)? by|spent|sent|paid|withdrawn|withdrawal|purchase|txn of|transferred|dr\b)/.test(low);
+  const cred=/\b(credited|received|deposited|refund(ed)?|cr\b)/.test(low);
+  let t=null;
+  if(deb&&cred){const di=low.search(/\b(debited|spent|sent|paid|withdrawn|purchase|transferred)/),ci=low.search(/\b(credited|received|deposited|refund)/);t=di<ci?'out':'in'}
+  else if(deb)t='out';else if(cred)t='in';else return null;
+  // amount: first money figure
+  let m=s.match(/(?:rs\.?|inr|₹)\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i)||s.match(/(?:debited|credited|spent|paid|sent)\s+(?:by|for|with|of)?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if(!m)return null;const a=Math.round(parseFloat(m[1].replace(/,/g,''))*100)/100;if(!(a>0)||a>1e8)return null;
+  // who
+  let who='';const pats=[
+    /UPI\/(?:P2[AM]|DR|CR)\/\d+\/([A-Za-z0-9 &.'-]+?)(?=\/|\s+(?:on|avl|ref|not)\b|\.|$)/i,
+    /\btowards\s+([A-Za-z0-9 &.'-]{2,40}?)(?=\s+(?:on|ref|info|avl)\b|[.,]|$)/i,
+    /;\s*([A-Za-z0-9 &.'-]{2,40}?) credited/i,
+    /\b(?:trf|transfer(?:red)?)\s+to\s+([A-Za-z0-9 &.'@-]{2,40}?)(?=\s+(?:ref|refno|on|via|upi|avl|a\/c)\b|[.,]|$)/i,
+    /\bto\s+(?:vpa\s+)?([A-Za-z0-9 &.'@_-]{2,40}?)(?=\s+(?:on|ref|refno|upi|via|avl|from|at|dt|date)\b|[.,(]|$)/i,
+    /\bat\s+([A-Za-z0-9 &.'*_-]{2,40}?)(?=\s+(?:on|ref|avl|via|txn|using|with|dt)\b|[.,]|$)/i,
+    /\bfrom\s+(?:vpa\s+)?([A-Za-z0-9 &.'@_-]{2,40}?)(?=\s+(?:on|ref|refno|upi|via|avl|to)\b|[.,(]|$)/i,
+    /\bby\s+([A-Za-z][A-Za-z0-9 &.'@_-]{1,40}?)(?=\s+(?:on|ref|refno|upi|via|avl)\b|[.,(]|$)/i];
+  for(const p of pats){const x=s.match(p);if(x){let w=x[1].trim();if(/^(a\/?c|acct|account|your|ur|card|xx|\*|x+\d)/i.test(w)||/^(?:a\/?c|xx)?\s*[x*]*\d{2,}$/i.test(w))continue;w=w.replace(/@.*$/,'').replace(/[._-]+/g,' ').replace(/\s+/g,' ').trim();if(w.length<2)continue;who=w;break}}
+  if(who&&who===who.toUpperCase()&&/[A-Z]/.test(who))who=who.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+  const mode=/\b(upi|vpa|imps|gpay|phonepe|paytm|bhim)\b/i.test(s)||/^sent\s+(rs|inr|₹)/i.test(s)?'upi':/\b(card|pos|atm)\b/i.test(s)?(/\batm\b/i.test(s)?'cash':'card'):'bank';
+  let bank='';const bk=(sender||'').toUpperCase().replace(/^[A-Z]{2}-/,'');const BANKS={HDFC:'HDFC',SBI:'SBI',ICICI:'ICICI',AXIS:'Axis',KOTAK:'Kotak',BOB:'Bank of Baroda',PNB:'PNB',IDFC:'IDFC',YES:'Yes Bank',INDUS:'IndusInd',CANARA:'Canara',UNION:'Union Bank',BOI:'Bank of India',FEDERAL:'Federal',PAYTM:'Paytm',AIRTEL:'Airtel Bank'};
+  for(const k in BANKS)if(bk.includes(k)||new RegExp('\\b'+k+'\\b','i').test(s)){bank=BANKS[k];break}
+  return {a,t,who,mode,bank}}
+const K_SMSQ='aajnukaam.smsq',K_SMSD='aajnukaam.smsdone';
+let smsQ=ls.get(K_SMSQ)||[],smsBusy=false;if(!Array.isArray(smsQ))smsQ=[];
+const SMS_CAT=[[/zomato|swiggy|domino|pizza|kfc|mcdonald|burger|cafe|chai|tea|restaurant|hotel|food|bakery|sweet|eatsure|starbucks/i,'Food'],
+  [/petrol|fuel|shell|indian oil|iocl|bpcl|hpcl|hp pay|nayara|reliance bp/i,'Fuel'],
+  [/amazon|flipkart|myntra|meesho|ajio|nykaa|dmart|bigbasket|blinkit|zepto|instamart|jiomart|reliance|mall|mart|store|shop/i,'Shopping'],
+  [/jio|airtel|\bvi\b|vodafone|bsnl|recharge|electric|torrent|dgvcl|mgvcl|ugvcl|pgvcl|gas|broadband|dth|tata play|netflix|hotstar|prime|spotify|youtube|insurance|lic|emi|loan/i,'Bills'],
+  [/uber|ola|rapido|irctc|redbus|makemytrip|goibibo|indigo|air ?india|metro|fastag|toll|parking/i,'Travel'],
+  [/apollo|pharma|medic|1mg|netmeds|hospital|clinic|doctor|lab/i,'Health'],[/rent/i,'Rent']];
+function smsCat(it){if(it.t==='in')return /salary/i.test(it.who)?'Salary':'Payment';const g=SMS_CAT.find(([re])=>re.test(it.who||''));return g?g[1]:(guessCat(it.who||'','out')||'Other')}
+function smsDone(){return ls.get(K_SMSD)||{}}
+function markSms(ids){const d=smsDone();ids.forEach(i=>d[i]=1);const k=Object.keys(d);if(k.length>3000)k.slice(0,k.length-3000).forEach(x=>delete d[x]);ls.set(K_SMSD,d)}
+function smsToExp(it){return{id:'xs'+it.sid,a:it.a,t:it.t,c:it.c||smsCat(it),n:it.who||(it.t==='in'?'Received':'Bank payment')+(it.bank?' · '+it.bank:''),m:it.mode||'bank',at:it.at}}
+function smsLooksAdded(it){return liveX().some(x=>!String(x.id).startsWith('xs')&&Math.abs(x.a-it.a)<0.01&&Math.abs(x.at-it.at)<864e5*1.5)}
+async function smsScan(force){if(!Native||!S.sms||typeof Native.smsRead!=='function'||smsBusy)return;if(!force&&S.smsAt&&Date.now()-(S.smsLast||0)<60e3)return;smsBusy=true;
+  try{const since=S.smsAt||Date.now()-30*864e5;const r=await Native.smsRead({since,max:400});
+    if(!r||!r.granted){S.sms=0;saveS();toast('SMS permission not given — bank expenses are off');smsBusy=false;paintSmsSettings();return}
+    const done=smsDone(),have=new Set(smsQ.map(x=>x.sid));let newest=S.smsAt||0,added=0,queued=0;const skip=[];
+    (r.messages||[]).sort((a,b)=>a.date-b.date).forEach(m=>{newest=Math.max(newest,m.date);if(done[m.id]||have.has(m.id)||exps.some(x=>x.id==='xs'+m.id))return;
+      const p=parseBankSms(m.body,m.from);if(!p||(p.t==='in'&&!S.smsIn)){skip.push(m.id);return}
+      const it={sid:String(m.id),at:m.date,...p};it.c=smsCat(it);
+      if(S.smsAuto&&!smsLooksAdded(it)){const x=smsToExp(it);touchX(x);exps.push(x);skip.push(m.id);added++}else{smsQ.push(it);queued++}});
+    markSms(skip);S.smsAt=newest;S.smsLast=Date.now();ls.set(K_SET,S);ls.set(K_SMSQ,smsQ);if(added)saveX();
+    if(added)toast('🏦 '+added+' bank expense'+(added===1?'':'s')+' added');else if(queued&&force)toast('🏦 '+queued+' bank payment'+(queued===1?'':'s')+' found — check Expenses');
+    if(view==='money')render()}catch(e){}
+  smsBusy=false}
+function smsDecide(items,add){if(add){items.forEach(it=>{const x=smsToExp(it);if(!exps.some(e=>e.id===x.id)){touchX(x);exps.push(x)}});saveX()}
+  const ids=new Set(items.map(i=>i.sid));smsQ=smsQ.filter(x=>!ids.has(x.sid));ls.set(K_SMSQ,smsQ);markSms([...ids]);render();
+  if(add)toast('Added '+items.length+' from bank ✓','Undo',()=>{items.forEach(it=>{const x=exps.find(e=>e.id==='xs'+it.sid);if(x){x.deleted=true;touchX(x)}});saveX();smsQ.push(...items);ls.set(K_SMSQ,smsQ);render()})}
+function renderSmsBox(area){if(!S.sms||!smsQ.length||query)return;const q=smsQ.slice().sort((a,b)=>b.at-a.at);
+  const box=el('div','smsbox');const h=el('div','sh');const t=el('span',null,'🏦 From bank SMS ');t.appendChild(el('small',null,q.length+' new'));
+  const all=el('button','btn sm primary','Add all');all.onclick=()=>smsDecide(q.filter(x=>!smsLooksAdded(x)),true);h.append(t,all);box.appendChild(h);
+  q.slice(0,8).forEach(it=>{const r=el('div','srw');const l=el('div');l.appendChild(el('div','w',(xIcon(it.c)+' ')+(it.who||(it.t==='in'?'Money received':'Payment'))));
+    const d=el('div','d',[xDay(it.at),hm(it.at),it.bank,XMODE[it.mode]].filter(Boolean).join(' · '));if(smsLooksAdded(it)){d.append(' · ');d.appendChild(el('b',null,'already added?'))}l.appendChild(d);
+    const ok=el('button','ok','Add');ok.setAttribute('aria-label','Add '+rs(it.a)+' '+(it.who||''));ok.onclick=()=>smsDecide([it],true);
+    const no=el('button',null,'✕');no.setAttribute('aria-label','Ignore');no.onclick=()=>smsDecide([it],false);
+    r.append(l,el('span','am'+(it.t==='in'?' in':''),(it.t==='in'?'+':'−')+rs(it.a)),ok,no);box.appendChild(r)});
+  if(q.length>8)box.appendChild(el('div','hint','+'+(q.length-8)+' more — add or clear these first'));
+  if(q.length>1){const ig=el('button','linkbtn','Ignore all');ig.style.fontSize='13px';ig.style.alignSelf='flex-start';ig.onclick=()=>smsDecide(q,false);box.appendChild(ig)}
+  area.appendChild(box)}
+function paintSmsSettings(){const b=$('#smsBox');if(!b)return;b.hidden=!Native;if(!Native)return;
+  $('#smsStatus').className='status'+(S.sms?' good':'');$('#smsStatus').textContent=S.sms?'✓ On — bank payments become expenses':'Off';
+  $('#smsOn').hidden=!!S.sms;$('#smsOff').hidden=!S.sms;$('#smsNow').hidden=!S.sms;$('#smsOpts').hidden=!S.sms;
+  $$('#smsAutoSeg button').forEach(x=>x.setAttribute('aria-pressed',(x.dataset.v==='1')===!!S.smsAuto));$$('#smsInSeg button').forEach(x=>x.setAttribute('aria-pressed',(x.dataset.v==='1')===!!S.smsIn))}
+
 /* ---------- voice input ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(SR){$('#micBtn').hidden=false;let rec=null;
@@ -1712,11 +1810,16 @@ $('#voiceLang').onchange=e=>{S.voice=e.target.value;saveS()};
 $('#catsIn').onchange=e=>{const c=e.target.value.split(',').map(s=>s.trim()).filter(Boolean);if(c.length){S.cats=[...new Set(c)];saveS();renderCats()}};
 $('#myName').onchange=e=>{S.name=e.target.value.trim().slice(0,30);saveS();renderCats()};
 $('#people').onchange=e=>{S.people=[...new Set(e.target.value.split(',').map(s=>s.trim().slice(0,30)).filter(Boolean))];saveS();renderCats()};
-function openSettings(){paintCalSettings();renderTones();$('#vol').value=S.vol;$('#summaryT').value=S.summary||'';$('#voiceLang').value=S.voice;$('#catsIn').value=S.cats.join(', ');
+function openSettings(){paintCalSettings();paintSmsSettings();renderTones();$('#vol').value=S.vol;$('#summaryT').value=S.summary||'';$('#voiceLang').value=S.voice;$('#catsIn').value=S.cats.join(', ');
   $('#myName').value=S.name||'';$('#people').value=(S.people||[]).join(', ');
   if(S.customName)$('#customName').textContent=S.customName;updateWa();updateCode();refreshPush();showSheet('setBg')}
 $('#setBtn').onclick=openSettings;
 $('#gcalConnect').onclick=pickCalendar;
+$('#smsOn').onclick=async()=>{S.sms=1;S.smsAt=0;saveS();paintSmsSettings();await smsScan(true);paintSmsSettings();if(S.sms&&smsQ.length){hideSheet('setBg');setView('money')}else if(S.sms)toast('On ✓ — no bank payments found in the last 30 days')};
+$('#smsNow').onclick=async()=>{const n=smsQ.length;await smsScan(true);if(smsQ.length===n&&!S.smsAuto)toast('No new bank payments')};
+$('#smsOff').onclick=()=>{S.sms=0;saveS();smsQ=[];ls.set(K_SMSQ,smsQ);paintSmsSettings();render();toast('Bank SMS off')};
+$('#smsAutoSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.smsAuto=b.dataset.v==='1'?1:0;saveS();paintSmsSettings()};
+$('#smsInSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.smsIn=b.dataset.v==='1'?1:0;saveS();paintSmsSettings()};
 $('#gcalOff').onclick=()=>{if(Native&&typeof Native.calSync==='function')Native.calSync({calId:-1,tasks:[]}).catch(()=>{});S.calId=null;S.calName='';saveS();calEvents=[];calAt=0;$('#gcalList').hidden=true;paintCalSettings();render();toast('Calendar unlinked — tasks removed from it')};
 $('#gcalPush').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.calPush=b.dataset.v==='1'?1:0;saveS();paintCalSettings();calPush()};
 $('#setClose').onclick=()=>{stopTone();hideSheet('setBg')};
@@ -1949,7 +2052,7 @@ tasks.forEach(t=>{if(!t.u)t.u=t.ex?0:(t.created||1);if(!t.items)t.items=[];
 idbGet('customTone').then(b=>{if(b)loadCustom(b);else if(S.tone==='custom'){S.tone='classic'}});
 try{speechSynthesis&&speechSynthesis.getVoices()}catch(e){}
 renderCats();renderFreq();syncStatusText();resetAdd();
-applyPending().then(async()=>{await nativeActions();genRecurring();saveLocal();render();nativeSoon();
+applyPending().then(async()=>{await nativeActions();genRecurring();smsScan(true);saveLocal();render();nativeSoon();
   const q=new URLSearchParams(location.search);
   if(q.get('add')){openAdd()}
   const p=q.get('ring');if(p){const t=tasks.find(x=>x.id===p);if(t&&!t.done){t.rung=true;ringQueue.push(t.id)}}
@@ -1957,7 +2060,7 @@ applyPending().then(async()=>{await nativeActions();genRecurring();saveLocal();r
   check();if(!PIN){if(!(API&&ls.get(K_LOCAL)))showLock()}else scheduleSync()});
 let lastMin=-1;setInterval(()=>{check();const m=Math.floor(Date.now()/60000);if(m!==lastMin){lastMin=m;paintDate();if(m%30===0)genRecurring();render();if(!$('#addBg').hidden&&!aManual.date&&!$('#quick').value)paintAdd()}},1000);
 setInterval(()=>{if(document.visibilityState==='visible')syncNow()},120000);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){applyPending();genRecurring();syncNow();render();check();if(wantWake&&!wl)reqWake()}else syncNow()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){applyPending();genRecurring();smsScan();syncNow();render();check();if(wantWake&&!wl)reqWake()}else syncNow()});
 })();
 
 </script>
