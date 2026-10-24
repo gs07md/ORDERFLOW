@@ -614,6 +614,16 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   </div>
 </div>
 
+<!-- Paste bank SMS -->
+<div class="sheet-bg" id="pasteBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pasteHead">
+    <div class="addtop"><span class="lbl" id="pasteHead">Paste bank SMS</span><button type="button" class="linkbtn" id="pasteClose">Close</button></div>
+    <div class="hint">Copy one or more payment SMS from your bank (UPI, card, ATM) and paste them below. Each one becomes an expense you can check before adding.</div>
+    <textarea id="pasteIn" class="lnote" style="min-height:30vh" placeholder="Sent Rs.250.00 From HDFC Bank A/C *1234 To ZOMATO On 22/10/26…"></textarea>
+    <button type="button" class="btn primary" id="pasteGo">Find expenses</button>
+  </div>
+</div>
+
 <!-- Later sheet -->
 <div class="sheet-bg" id="laterBg" hidden>
   <div class="sheet" role="dialog" aria-labelledby="laterTitle">
@@ -653,15 +663,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="field"><label for="vol">Volume</label><input type="range" id="vol" min="0.1" max="1" step="0.05"></div>
     <div class="srow"><button class="chip2" id="soundBtn"><span class="dot"></span><span>Turn sound on</span></button><button class="chip2" id="wakeBtn"><span class="dot"></span><span>Keep screen on</span></button></div>
 
-    <div id="smsBox" hidden style="display:flex;flex-direction:column;gap:8px">
+    <div id="smsBox" style="display:flex;flex-direction:column;gap:8px">
       <h3>Bank SMS → Expenses</h3>
-      <div class="hint">Reads your bank's payment SMS (UPI, card, ATM) on this phone and turns them into expenses. Messages stay on your phone — only the expenses you add are saved.</div>
-      <div class="status" id="smsStatus">Off</div>
-      <div class="srow"><button class="btn sm primary" id="smsOn">Turn on</button><button class="btn sm" id="smsNow" hidden>Check now</button><button class="btn sm danger" id="smsOff" hidden>Turn off</button></div>
-      <div id="smsOpts" hidden style="display:flex;flex-direction:column;gap:6px">
-        <div class="seg" id="smsAutoSeg"><button type="button" data-v="0">Ask me first</button><button type="button" data-v="1">Add automatically</button></div>
-        <div class="seg" id="smsInSeg"><button type="button" data-v="0">Only spends</button><button type="button" data-v="1">Spends + money received</button></div>
-      </div>
+      <div class="hint">In your Messages app, long-press a bank SMS → <b>Share</b> → <b>To Do List</b>, and it becomes an expense. Or copy several bank SMS and paste them here.</div>
+      <div class="srow"><button class="btn sm primary" id="smsPasteBtn">📋 Paste bank SMS</button></div>
     </div>
 
     <div id="gcalBox" hidden style="display:flex;flex-direction:column;gap:8px">
@@ -1141,7 +1146,7 @@ function hideSheet(id){if(!$('#'+id).hidden){$('#'+id).hidden=true;if(history.st
 window.addEventListener('popstate',()=>{if(skipPop){skipPop=false;return}
   if(!$('#focus').hidden){endFocus();return}
   if(!$('#lsBg').hidden){$('#lsBg').hidden=true;closeList();return}
-  for(const id of ['laterBg','editBg','addBg','xBg','hbBg','hmBg','lsBg','setBg'])if(!$('#'+id).hidden){$('#'+id).hidden=true;if(id==='setBg')stopTone();if(id==='editBg')editId=null;if(id==='laterBg')laterFor=null;return}});
+  for(const id of ['laterBg','editBg','addBg','xBg','hbBg','hmBg','lsBg','pasteBg','setBg'])if(!$('#'+id).hidden){$('#'+id).hidden=true;if(id==='setBg')stopTone();if(id==='editBg')editId=null;if(id==='laterBg')laterFor=null;return}});
 function openAdd(dateYmd){resetAdd();if(dateYmd){$('#aDate').value=dateYmd;aManual.date=true;paintAdd()}$('#quick').value='';$('#aLast').hidden=true;renderFreq();paintAdd();showSheet('addBg');setTimeout(()=>$('#quick').focus(),80)}
 function closeAdd(){hideSheet('addBg')}
 $('#addDone').onclick=closeAdd;
@@ -1526,6 +1531,18 @@ const SMS_CAT=[[/zomato|swiggy|domino|pizza|kfc|mcdonald|burger|cafe|chai|tea|re
   [/jio|airtel|\bvi\b|vodafone|bsnl|recharge|electric|torrent|dgvcl|mgvcl|ugvcl|pgvcl|gas|broadband|dth|tata play|netflix|hotstar|prime|spotify|youtube|insurance|lic|emi|loan/i,'Bills'],
   [/uber|ola|rapido|irctc|redbus|makemytrip|goibibo|indigo|air ?india|metro|fastag|toll|parking/i,'Travel'],
   [/apollo|pharma|medic|1mg|netmeds|hospital|clinic|doctor|lab/i,'Health'],[/rent/i,'Rent']];
+function smsDate(txt){const s=String(txt);const MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let d=null,m;
+  if((m=s.match(/\b(20\d\d)-(\d{1,2})-(\d{1,2})/)))d=new Date(+m[1],+m[2]-1,+m[3]);
+  else if((m=s.match(/\b(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})\b/)))d=new Date(+m[3]<100?2000+ +m[3]:+m[3],+m[2]-1,+m[1]);
+  else if((m=s.match(/\b(\d{1,2})[- ]?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[- ,]*(\d{2,4})\b/i)))d=new Date(+m[3]<100?2000+ +m[3]:+m[3],MON[m[2].toLowerCase()],+m[1]);
+  if(!d||isNaN(d))return null;const t=d.getTime();if(t>Date.now()+864e5||t<Date.now()-400*864e5)return null;
+  if(ymd(t)===ymd(Date.now()))return Date.now();d.setHours(12,0,0,0);return d.getTime()}
+function smsHash(t){let h=0;for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))|0;return 'p'+(h>>>0).toString(36)+t.length.toString(36)}
+function smsItems(text){const raw=String(text||'').trim();if(!raw)return[];let parts=raw.split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length===1){const lines=raw.split(/\n/).map(x=>x.trim()).filter(Boolean);const ok=lines.filter(l=>parseBankSms(l,''));if(ok.length>1)parts=ok}
+  const out=[];parts.forEach(t=>{const p=parseBankSms(t.replace(/\n/g,' '),'');if(!p)return;const it={sid:smsHash(t),at:smsDate(t)||Date.now(),...p};it.c=smsCat(it);out.push(it)});return out}
+function openXFromSms(it){openX(null,ymd(it.at));xSetType=it.t;xSetMode=it.mode||'bank';xSetCat=it.c||smsCat(it);xCatManual=true;
+  $('#xAmt').value=String(it.a);$('#xNote').value=it.who||(it.bank?it.bank+' payment':'');paintX()}
 function smsCat(it){if(it.t==='in')return /salary/i.test(it.who)?'Salary':'Payment';const g=SMS_CAT.find(([re])=>re.test(it.who||''));return g?g[1]:(guessCat(it.who||'','out')||'Other')}
 function smsDone(){return ls.get(K_SMSD)||{}}
 function markSms(ids){const d=smsDone();ids.forEach(i=>d[i]=1);const k=Object.keys(d);if(k.length>3000)k.slice(0,k.length-3000).forEach(x=>delete d[x]);ls.set(K_SMSD,d)}
@@ -1546,7 +1563,7 @@ async function smsScan(force){if(!Native||!S.sms||typeof Native.smsRead!=='funct
 function smsDecide(items,add){if(add){items.forEach(it=>{const x=smsToExp(it);if(!exps.some(e=>e.id===x.id)){touchX(x);exps.push(x)}});saveX()}
   const ids=new Set(items.map(i=>i.sid));smsQ=smsQ.filter(x=>!ids.has(x.sid));ls.set(K_SMSQ,smsQ);markSms([...ids]);render();
   if(add)toast('Added '+items.length+' from bank ✓','Undo',()=>{items.forEach(it=>{const x=exps.find(e=>e.id==='xs'+it.sid);if(x){x.deleted=true;touchX(x)}});saveX();smsQ.push(...items);ls.set(K_SMSQ,smsQ);render()})}
-function renderSmsBox(area){if(!S.sms||!smsQ.length||query)return;const q=smsQ.slice().sort((a,b)=>b.at-a.at);
+function renderSmsBox(area){if(!smsQ.length||query)return;const q=smsQ.slice().sort((a,b)=>b.at-a.at);
   const box=el('div','smsbox');const h=el('div','sh');const t=el('span',null,'🏦 From bank SMS ');t.appendChild(el('small',null,q.length+' new'));
   const all=el('button','btn sm primary','Add all');all.onclick=()=>smsDecide(q.filter(x=>!smsLooksAdded(x)),true);h.append(t,all);box.appendChild(h);
   q.slice(0,8).forEach(it=>{const r=el('div','srw');const l=el('div');l.appendChild(el('div','w',(xIcon(it.c)+' ')+(it.who||(it.t==='in'?'Money received':'Payment'))));
@@ -1557,10 +1574,7 @@ function renderSmsBox(area){if(!S.sms||!smsQ.length||query)return;const q=smsQ.s
   if(q.length>8)box.appendChild(el('div','hint','+'+(q.length-8)+' more — add or clear these first'));
   if(q.length>1){const ig=el('button','linkbtn','Ignore all');ig.style.fontSize='13px';ig.style.alignSelf='flex-start';ig.onclick=()=>smsDecide(q,false);box.appendChild(ig)}
   area.appendChild(box)}
-function paintSmsSettings(){const b=$('#smsBox');if(!b)return;b.hidden=!Native;if(!Native)return;
-  $('#smsStatus').className='status'+(S.sms?' good':'');$('#smsStatus').textContent=S.sms?'✓ On — bank payments become expenses':'Off';
-  $('#smsOn').hidden=!!S.sms;$('#smsOff').hidden=!S.sms;$('#smsNow').hidden=!S.sms;$('#smsOpts').hidden=!S.sms;
-  $$('#smsAutoSeg button').forEach(x=>x.setAttribute('aria-pressed',(x.dataset.v==='1')===!!S.smsAuto));$$('#smsInSeg button').forEach(x=>x.setAttribute('aria-pressed',(x.dataset.v==='1')===!!S.smsIn))}
+function paintSmsSettings(){}
 
 /* ---------- voice input ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -1814,16 +1828,18 @@ $('#voiceLang').onchange=e=>{S.voice=e.target.value;saveS()};
 $('#catsIn').onchange=e=>{const c=e.target.value.split(',').map(s=>s.trim()).filter(Boolean);if(c.length){S.cats=[...new Set(c)];saveS();renderCats()}};
 $('#myName').onchange=e=>{S.name=e.target.value.trim().slice(0,30);saveS();renderCats()};
 $('#people').onchange=e=>{S.people=[...new Set(e.target.value.split(',').map(s=>s.trim().slice(0,30)).filter(Boolean))];saveS();renderCats()};
-function openSettings(){paintCalSettings();paintSmsSettings();renderTones();$('#vol').value=S.vol;$('#summaryT').value=S.summary||'';$('#voiceLang').value=S.voice;$('#catsIn').value=S.cats.join(', ');
+function openSettings(){paintCalSettings();renderTones();$('#vol').value=S.vol;$('#summaryT').value=S.summary||'';$('#voiceLang').value=S.voice;$('#catsIn').value=S.cats.join(', ');
   $('#myName').value=S.name||'';$('#people').value=(S.people||[]).join(', ');
   if(S.customName)$('#customName').textContent=S.customName;updateWa();updateCode();refreshPush();showSheet('setBg')}
 $('#setBtn').onclick=openSettings;
 $('#gcalConnect').onclick=pickCalendar;
-$('#smsOn').onclick=async()=>{S.sms=1;S.smsAt=0;saveS();paintSmsSettings();await smsScan(true);paintSmsSettings();if(S.sms&&smsQ.length){hideSheet('setBg');setView('money')}else if(S.sms)toast('On ✓ — no bank payments found in the last 30 days')};
-$('#smsNow').onclick=async()=>{const n=smsQ.length;await smsScan(true);if(smsQ.length===n&&!S.smsAuto)toast('No new bank payments')};
-$('#smsOff').onclick=()=>{S.sms=0;saveS();smsQ=[];ls.set(K_SMSQ,smsQ);paintSmsSettings();render();toast('Bank SMS off')};
-$('#smsAutoSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.smsAuto=b.dataset.v==='1'?1:0;saveS();paintSmsSettings()};
-$('#smsInSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.smsIn=b.dataset.v==='1'?1:0;saveS();paintSmsSettings()};
+$('#smsPasteBtn').onclick=()=>{hideSheet('setBg');setTimeout(()=>{$('#pasteIn').value='';showSheet('pasteBg');setTimeout(()=>$('#pasteIn').focus(),80)},60)};
+$('#pasteClose').onclick=()=>hideSheet('pasteBg');$('#pasteBg').onclick=e=>{if(e.target.id==='pasteBg')hideSheet('pasteBg')};
+$('#pasteGo').onclick=()=>{const items=smsItems($('#pasteIn').value);if(!items.length){toast('No bank payment found in that text');return}
+  const done=smsDone(),have=new Set(smsQ.map(x=>x.sid));const fresh=items.filter(it=>!done[it.sid]&&!have.has(it.sid)&&!exps.some(x=>x.id==='xs'+it.sid));
+  if(!fresh.length){toast('These are already added');return}
+  if(fresh.length===1){hideSheet('pasteBg');setView('money');setTimeout(()=>openXFromSms(fresh[0]),80);markSms([fresh[0].sid]);return}
+  smsQ.push(...fresh);ls.set(K_SMSQ,smsQ);hideSheet('pasteBg');setView('money');toast(fresh.length+' bank payments found — check and add')};
 $('#gcalOff').onclick=()=>{if(Native&&typeof Native.calSync==='function')Native.calSync({calId:-1,tasks:[]}).catch(()=>{});S.calId=null;S.calName='';saveS();calEvents=[];calAt=0;$('#gcalList').hidden=true;paintCalSettings();render();toast('Calendar unlinked — tasks removed from it')};
 $('#gcalPush').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.calPush=b.dataset.v==='1'?1:0;saveS();paintCalSettings();calPush()};
 $('#setClose').onclick=()=>{stopTone();hideSheet('setBg')};
@@ -2022,7 +2038,9 @@ async function nativeActions(){if(!Native)return;let r;try{r=await Native.takeAc
     else if(a.action==='stop'){t.ack=t.due;saveLocal()}});
   if(hch)saveH();if(lch)saveL();
   save();render();
-  if(shared){if(view==='money'||view==='lists')setView('today');openAdd();const q=$('#quick');q.value=shared.replace(/\s+/g,' ').trim().slice(0,200);if(q.oninput)q.oninput();setTimeout(()=>{q.focus();try{q.setSelectionRange(q.value.length,q.value.length)}catch(e){}},120);return}
+  if(shared){const sx=smsItems(shared);if(sx.length===1){setView('money');openXFromSms(sx[0]);markSms([sx[0].sid]);return}
+    if(sx.length>1){const have=new Set(smsQ.map(x=>x.sid));smsQ.push(...sx.filter(x=>!have.has(x.sid)));ls.set(K_SMSQ,smsQ);setView('money');return}
+    if(view==='money'||view==='lists')setView('today');openAdd();const q=$('#quick');q.value=shared.replace(/\s+/g,' ').trim().slice(0,200);if(q.oninput)q.oninput();setTimeout(()=>{q.focus();try{q.setSelectionRange(q.value.length,q.value.length)}catch(e){}},120);return}
   if(wOpen==='habits'){setView('today');if(!liveH().length)openHabit(null)}else if(wOpen==='lists'||wOpen==='money'){setView(wOpen)}
   else if(wOpen.startsWith('list:')){setView('lists');const id=wOpen.slice(5);if(lists.some(x=>x.id===id&&!x.deleted))openList(id)}
   else if(wOpen==='add'){if(view==='money')setView('today');openAdd()}else if(wOpen==='addx'){if(view!=='money'&&view!=='cal')setView('money');openX()}}
