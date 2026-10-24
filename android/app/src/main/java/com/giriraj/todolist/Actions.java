@@ -20,6 +20,7 @@ public class Actions {
         stopRinging(ctx);
         AlarmStore store = new AlarmStore(ctx);
         String id = a.optString("id"), taskId = a.optString("taskId");
+        TaskNotify.cancel(ctx, id);
         long at = a.optLong("at");
         boolean isTest = "test".equals(taskId);
         try {

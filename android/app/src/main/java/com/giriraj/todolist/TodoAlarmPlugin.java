@@ -47,6 +47,7 @@ public class TodoAlarmPlugin extends Plugin {
             s.setAlarms(clean);
             s.clearExtras(); // snoozes made on the phone are now part of the app's own list
             s.setPrefs(call.getInt("ringMins", 3), call.getBoolean("vibrate", true));
+            s.setStyle(call.getString("style", "notify"));
             int n = AlarmScheduler.scheduleAll(getContext());
             JSObject r = new JSObject(); r.put("count", n); call.resolve(r);
         } catch (Exception e) { call.reject("sync failed: " + e.getMessage()); }
@@ -196,7 +197,8 @@ public class TodoAlarmPlugin extends Plugin {
         try {
             long at = System.currentTimeMillis() + call.getInt("seconds", 10) * 1000L;
             JSONObject a = new JSONObject();
-            a.put("id", "test@" + at).put("taskId", "test").put("at", at).put("title", "Test alarm").put("body", "This is how your tasks will ring");
+            boolean notify = "notify".equals(store().style());
+            a.put("id", "test@" + at).put("taskId", "test").put("at", at).put("title", notify ? "Test reminder" : "Test alarm").put("body", notify ? "This is how your task reminders will look" : "This is how your tasks will ring");
             store().addExtra(a);
             AlarmScheduler.scheduleOne(getContext(), a.getString("id"), at);
             call.resolve();

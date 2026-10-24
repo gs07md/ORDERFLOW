@@ -526,7 +526,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="field"><label for="eTitle">Task</label><input id="eTitle" required></div>
     <div class="two">
       <div class="field"><label for="eDate">📅 Date</label><input type="date" id="eDate"></div>
-      <div class="field"><label for="eTime">⏰ Ring time</label><input type="time" id="eTime"><span class="hint" style="font-size:12px">Empty = no ring</span></div>
+      <div class="field"><label for="eTime">⏰ Reminder time</label><input type="time" id="eTime"><span class="hint" style="font-size:12px">Empty = no reminder</span></div>
     </div>
     <div class="two">
       <div class="field"><label for="eRepeat">🔁 Repeat</label>
@@ -555,6 +555,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <div class="two">
         <div class="field" hidden><label for="eWho">👤 Assign to</label><select id="eWho"></select></div>
         <div class="field"><label for="eTone">🎵 Ringtone</label><select id="eTone"></select></div>
+        <div class="field"><label for="eRstyle">🔔 Reminder type</label><select id="eRstyle"><option value="">Default (from Settings)</option><option value="notify">🔔 Notification</option><option value="alarm">⏰ Alarm (rings)</option></select></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="dupBtn">Duplicate</button><button type="button" class="btn" id="focusBtn">⏱ Focus timer</button></div>
     </div></details>
@@ -634,6 +635,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
     <h3>Ring</h3>
     <div id="nativeBox" hidden style="display:flex;flex-direction:column;gap:10px">
+      <div class="field"><span class="lbl">How should tasks remind you?</span>
+        <div class="seg" id="rstyleSeg"><button type="button" data-v="notify">🔔 Notification</button><button type="button" data-v="alarm">⏰ Alarm (rings)</button></div>
+        <span class="hint" id="rstyleHint"></span></div>
       <div class="status good" id="nativeStatus">⏰ This app rings like an alarm clock, even when the phone is locked.</div>
       <div class="alarmrow"><div class="txt">Alarm sound<small id="nativeTone">Phone default alarm</small></div><button class="btn sm" id="nativeToneBtn">Change</button></div>
       <div class="alarmrow"><button class="btn sm primary" id="nativePerm">Allow alarm permissions</button><button class="btn sm" id="nativeTest">Test alarm (10 sec)</button></div>
@@ -755,7 +759,7 @@ const pad=n=>String(n).padStart(2,'0');
 const K_TASKS='aajnukaam.tasks', K_SET='aajnukaam.settings', K_DEV='aajnukaam.device', K_LOG='aajnukaam.log', K_PIN='aajnukaam.pin';
 let PIN=null;
 const LOCAL=['rung','preRung','ack'];
-const DEF={tone:'classic',vol:0.85,ringMins:3,vib:1,speak:1,repeat:3,pre:0,summary:'09:00',voice:'en-IN',theme:'auto',
+const DEF={rstyle:'notify',tone:'classic',vol:0.85,ringMins:3,vib:1,speak:1,repeat:3,pre:0,summary:'09:00',voice:'en-IN',theme:'auto',
   cats:['Personal','Home','Family','Health','Money','Work','Shopping'],people:[],name:'',mine:0,listId:'',lastSync:0};
 let tasks=[],S={},view='today',cat='all',who='all',query='',editId=null,editPrio=4,editItems=[],ringQueue=[],ringing=null,laterFor=null,calMonth=null,calSel=null;
 let aManual={date:false,time:false,rep:false,prio:false};
@@ -1059,10 +1063,10 @@ function paintAdd(){
       [['Today',today],['Tomorrow',ymd(at(1,0,0))],['Day after',ymd(at(2,0,0))],['Next Monday',ymd(at(nm,0,0))]].forEach(([l,d])=>mk(box,l,dv===d,setD(d)));
       mk(box,'No date',!dv,()=>{$('#aDate').value='';$('#aTime').value='';$('#aRep').value='none';aManual.date=aManual.time=true});
       mk(box,'📅 Pick date…',false,()=>openPicker($('#aDate')),true);
-    } else if(addPanel==='time'){head.textContent='Ring at what time?';
+    } else if(addPanel==='time'){head.textContent='Remind me at what time?';
       const setT=(h,m)=>()=>{$('#aTime').value=pad(h)+':'+pad(m);aManual.time=true;if(!$('#aDate').value)$('#aDate').value=ymd(Date.now());fixPast()};
       const rel=min=>()=>{const t=Date.now()+min*60000;$('#aDate').value=ymd(t);$('#aTime').value=hmv(t);aManual.date=aManual.time=true};
-      mk(box,'No ring',!tv,()=>{$('#aTime').value='';aManual.time=true});
+      mk(box,'No reminder',!tv,()=>{$('#aTime').value='';aManual.time=true});
       mk(box,'In 30 min',false,rel(30));mk(box,'In 1 hour',false,rel(60));
       [[10,'10am'],[14,'2pm'],[18,'6pm'],[20,'8pm']].forEach(([h,l])=>mk(box,l,tv===pad(h)+':00',setT(h,0)));
       mk(box,'⏰ Pick time…',false,()=>openPicker($('#aTime')),true);
@@ -1085,8 +1089,8 @@ function paintAdd(){
     }
   }
   const h=$('#aHint');
-  if(due&&!allDay){h.className='ahint';h.textContent='🔔 Rings '+dayLabel(due)+' at '+hm(due)+(due<Date.now()-60000?' — time has passed, rings now':'')}
-  else if(due){h.className='ahint muted';h.textContent='📅 '+dayLabel(due)+' · no ring — tap "⏰ Add time" for a ring'}
+  if(due&&!allDay){const al=Native&&S.rstyle==='alarm';h.className='ahint';h.textContent=(al?'⏰ Rings ':'🔔 Reminder ')+dayLabel(due)+' at '+hm(due)+(due<Date.now()-60000?' — time has passed, reminds now':'')}
+  else if(due){h.className='ahint muted';h.textContent='📅 '+dayLabel(due)+' · no reminder — tap "⏰ Add time" to get one'}
   else{h.className='ahint muted';h.textContent='No date · no ring'}
   $('.sendbtn').disabled=!$('#quick').value.trim();
 }
@@ -1593,9 +1597,9 @@ function openEdit(id){const t=tasks.find(x=>x.id===id);if(!t)return;editId=id;fi
   $('#eTitle').value=t.title;
   if(t.due){$('#eDate').value=ymd(t.due);$('#eTime').value=t.allDay?'':hmv(t.due)}
   else{$('#eDate').value='';$('#eTime').value=''}
-  $('#eRepeat').value=t.repeat||'none';$('#eCat').value=t.cat||'';$('#eWho').value=t.who||'';$('#eTone').value=t.tone||'';$('#eNote').value=t.note||'';setPrio(t.prio);
+  $('#eRepeat').value=t.repeat||'none';$('#eCat').value=t.cat||'';$('#eWho').value=t.who||'';$('#eTone').value=t.tone||'';$('#eRstyle').value=t.rstyle||'';$('#eNote').value=t.note||'';setPrio(t.prio);
   if(t.who&&$('#eWho').value!==t.who){const o=document.createElement('option');o.value=o.textContent=t.who;$('#eWho').appendChild(o);$('#eWho').value=t.who}
-  editItems=(t.items||[]).map(i=>({...i}));renderItems();$('#eItemNew').value='';$('#editForm details').open=!!(t.who||t.tone);
+  editItems=(t.items||[]).map(i=>({...i}));renderItems();$('#eItemNew').value='';$('#editForm details').open=!!(t.who||t.tone||t.rstyle);
   ePin=!!t.pin;$('#ePin').setAttribute('aria-pressed',ePin);
   $('#eCname').value=t.cname||'';$('#ePhone').value=t.phone||'';setEAct(t.act||'');$('#eMsg').value=t.msg||'';$('#ePick').hidden=!Native;
   showSheet('editBg')}
@@ -1611,7 +1615,7 @@ $('#editForm').onsubmit=e=>{e.preventDefault();const t=tasks.find(x=>x.id===edit
   t.title=$('#eTitle').value.trim()||t.title;
   const dv=$('#eDate').value,tv=$('#eTime').value;
   if(dv||tv){const d=dv?new Date(dv+'T00:00'):new Date();if(tv){const[h,m]=tv.split(':');d.setHours(+h,+m,0,0)}const nd=d.getTime();if(nd!==t.due||t.allDay!==!tv){t.rung=false;t.preRung=false;t.ack=null}t.due=nd;t.allDay=!tv}else{t.due=null;t.allDay=false}
-  t.repeat=$('#eRepeat').value;t.cat=$('#eCat').value;t.who=$('#eWho').value;t.tone=$('#eTone').value;t.note=$('#eNote').value.trim();t.prio=editPrio;t.ex=false;t.pin=ePin;
+  t.repeat=$('#eRepeat').value;t.cat=$('#eCat').value;t.who=$('#eWho').value;t.tone=$('#eTone').value;t.rstyle=$('#eRstyle').value;t.note=$('#eNote').value.trim();t.prio=editPrio;t.ex=false;t.pin=ePin;
   t.items=editItems.filter(i=>i.t.trim()).map(i=>({t:i.t.trim(),d:!!i.d}));
   t.cname=$('#eCname').value.trim().slice(0,40);t.phone=digits10($('#ePhone').value);t.act=eAct;t.msg=eAct==='wa'?$('#eMsg').value.trim().slice(0,500):'';
   if($('#ePhone').value.trim()&&!t.phone)toast('Mobile number needs 10 digits');
@@ -1991,10 +1995,10 @@ function occurrences(t,now){const out=[];if(t.repeat==='none'||!t.repeat){if(t.d
 function nativeSync(){if(!Native)return;const now=Date.now();const alarms=[];
   live().forEach(t=>{if(t.done||!t.due||t.allDay||!mineOk(t))return;
     occurrences(t,now).forEach(at=>{if(t.ack===at)return;const tp=taskPhone(t);
-      alarms.push({id:t.id+'@'+at,taskId:t.id,at,title:t.title,body:[t.cat,t.note].filter(Boolean).join(' · ').slice(0,200),
+      alarms.push({id:t.id+'@'+at,taskId:t.id,at,title:t.title,style:t.rstyle==='alarm'||t.rstyle==='notify'?t.rstyle:'',body:[t.cat,t.note].filter(Boolean).join(' · ').slice(0,200),
         phone:tp?'+91'+tp:'',cname:t.cname||'',act:tp?(t.act||''):'',msg:t.msg||'',prio:t.prio||4})})});
   alarms.sort((a,b)=>a.at-b.at);
-  Native.sync({alarms:alarms.slice(0,200),ringMins:S.ringMins||3,vibrate:!!S.vib}).catch(e=>console.log('alarm sync failed',e));nativeWidget();calPush()}
+  Native.sync({alarms:alarms.slice(0,200),ringMins:S.ringMins||3,vibrate:!!S.vib,style:S.rstyle==='alarm'?'alarm':'notify'}).catch(e=>console.log('alarm sync failed',e));nativeWidget();calPush()}
 // home-screen widget: open tasks for the next few days (it shows today's) and recent spending
 function nativeWidget(){if(!Native||typeof Native.widget!=='function')return;const st=startToday(),lim=st+3*864e5;
   const tk=live().filter(t=>!t.done&&t.due&&t.due<lim&&mineOk(t)).sort(sortT).slice(0,40).map(t=>({id:t.id,at:t.due,title:String(t.title).slice(0,80),allDay:!!t.allDay}));
@@ -2022,13 +2026,17 @@ async function nativeActions(){if(!Native)return;let r;try{r=await Native.takeAc
   if(wOpen==='habits'){setView('today');if(!liveH().length)openHabit(null)}else if(wOpen==='lists'||wOpen==='money'){setView(wOpen)}
   else if(wOpen.startsWith('list:')){setView('lists');const id=wOpen.slice(5);if(lists.some(x=>x.id===id&&!x.deleted))openList(id)}
   else if(wOpen==='add'){if(view==='money')setView('today');openAdd()}else if(wOpen==='addx'){if(view!=='money'&&view!=='cal')setView('money');openX()}}
-function nativeSettings(){if(!Native)return;$('#nativeBox').hidden=false;
+function paintRstyle(){const st=S.rstyle==='alarm'?'alarm':'notify';$$('#rstyleSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===st));
+  $('#rstyleHint').textContent=st==='notify'?'A normal notification with sound at the time, with Done / 10 min later buttons. No ringing screen.':'Rings like an alarm clock over the lock screen until you stop it.';
+  $('#nativeTest').textContent=st==='notify'?'Test reminder (10 sec)':'Test alarm (10 sec)';$('#nativeTone').closest('.alarmrow').hidden=st==='notify'}
+function nativeSettings(){if(!Native)return;$('#nativeBox').hidden=false;paintRstyle();
   Native.getSettings().then(r=>{if(r&&r.toneTitle)$('#nativeTone').textContent=r.toneTitle;const ok=r&&r.canExact&&r.notifications&&r.fullScreen;
-    $('#nativeStatus').className='status '+(ok?'good':'bad');$('#nativeStatus').textContent=ok?'⏰ Alarms are ready — they ring even when the phone is locked.':'⚠️ Allow alarm permissions so tasks can ring.';$('#nativePerm').hidden=!!ok}).catch(()=>{})}
+    const nt=S.rstyle!=='alarm';$('#nativeStatus').className='status '+(ok?'good':'bad');$('#nativeStatus').textContent=ok?(nt?'🔔 Reminders are ready — you get a notification on time, even when the app is closed.':'⏰ Alarms are ready — they ring even when the phone is locked.'):'⚠️ Allow permissions so reminders can come on time.';$('#nativePerm').hidden=!!ok}).catch(()=>{})}
 if(Native){
   $('#nativeToneBtn').onclick=()=>Native.pickRingtone().then(r=>{if(r&&r.title){$('#nativeTone').textContent=r.title;toast('Alarm sound: '+r.title)}}).catch(()=>{});
   $('#nativePerm').onclick=()=>Native.ensurePermissions().then(()=>setTimeout(nativeSettings,800)).catch(()=>{});
-  $('#nativeTest').onclick=()=>Native.test({seconds:10}).then(()=>toast('Alarm will ring in 10 seconds — you can lock the phone')).catch(()=>toast('Could not set test alarm'));
+  $('#nativeTest').onclick=()=>Native.test({seconds:10}).then(()=>toast(S.rstyle==='alarm'?'Alarm will ring in 10 seconds — you can lock the phone':'A test notification comes in 10 seconds')).catch(()=>toast('Could not set the test'));
+  $('#rstyleSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.rstyle=b.dataset.v;saveS();paintRstyle();nativeSettings();nativeSoon();toast(S.rstyle==='alarm'?'Tasks will ring like an alarm':'Tasks will come as notifications')};
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){nativeActions();nativeSoon();setTimeout(nativeActions,700);if(calOn())needEvents(0,0,true)}});
   Native.getSettings().then(r=>{if(r&&!(r.canExact&&r.notifications))Native.ensurePermissions().catch(()=>{})}).catch(()=>{});
 }

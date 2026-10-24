@@ -66,6 +66,9 @@ public class AlarmStore {
     public int ringMins() { return sp.getInt("ringMins", 3); }
     public boolean vibrate() { return sp.getBoolean("vibrate", true); }
     public void setPrefs(int ringMins, boolean vibrate) { sp.edit().putInt("ringMins", ringMins).putBoolean("vibrate", vibrate).apply(); }
+    /** "notify" = normal notification, "alarm" = ringing full-screen alarm */
+    public String style() { return sp.getString("style", "notify"); }
+    public void setStyle(String s) { sp.edit().putString("style", "alarm".equals(s) ? "alarm" : "notify").apply(); }
 
     public java.util.Set<String> scheduledIds() { return new java.util.HashSet<>(sp.getStringSet("scheduled", new java.util.HashSet<>())); }
     public void setScheduledIds(java.util.Set<String> ids) { sp.edit().putStringSet("scheduled", ids).apply(); }
