@@ -162,9 +162,9 @@ h1{font-weight:700;font-size:30px;line-height:1.1;margin:0;letter-spacing:-.01em
 /* fab + nav */
 .fab{position:fixed;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(78px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);box-shadow:0 6px 18px rgba(14,124,102,.35);display:grid;place-items:center;z-index:15}
 .fab svg{width:28px;height:28px}
-.nav{position:fixed;left:0;right:0;bottom:0;z-index:14;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:14;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(6,minmax(0,1fr));
   padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
-.nav button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0;color:var(--muted);font-size:12px;font-weight:600;position:relative}
+.nav button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0;color:var(--muted);font-size:11.5px;white-space:nowrap;font-weight:600;position:relative}
 .nav button svg{width:24px;height:24px}
 .nav button[aria-selected="true"]{color:var(--accent)}
 .nav .n{position:absolute;top:0;left:calc(50% + 6px);background:var(--p1);color:#fff;border-radius:999px;font-size:10.5px;min-width:17px;height:17px;line-height:17px;padding:0 4px}
@@ -499,7 +499,6 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         <h1 id="viewTitle">Today</h1>
       </div>
       <div class="hbtns">
-        <button class="iconbtn" id="wtBtn" aria-label="Weight loss" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8.5 9.5a5 5 0 0 1 7 0"/><path d="M12 9.5l1.4-2"/></svg></button>
         <button class="iconbtn" id="listsBtn" aria-label="Lists and notes" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></button>
         <button class="iconbtn" id="searchBtn" aria-label="Search" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
         <button class="iconbtn" id="setBtn" aria-label="Settings"><span class="syncdot" id="syncDot"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
@@ -533,6 +532,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   <button role="tab" data-v="cal" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Calendar</button>
   <button role="tab" data-v="done" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="M22 4L12 14l-3-3"/></svg>Done<span class="n soft" id="n-done" hidden></span></button>
   <button role="tab" data-v="money" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10h19M16.5 14.5h1.5"/></svg>Expenses</button>
+  <button role="tab" data-v="weight" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8.5 9.5a5 5 0 0 1 7 0"/><path d="M12 9.5l1.4-2"/></svg>Weight</button>
 </nav>
 
 <!-- Add sheet -->
@@ -963,7 +963,7 @@ function render(){
   $('#viewTitle').textContent=query?'Search':TITLES[view];
   try{if(navigator.setAppBadge){pendToday?navigator.setAppBadge(pendToday):navigator.clearAppBadge()}}catch(e){}
   const area=$('#listArea');
-  $('#cats').hidden=view==='money'||view==='lists'||view==='weight';$('#listsBtn').setAttribute('aria-pressed',view==='lists');$('#wtBtn').setAttribute('aria-pressed',view==='weight');$('#fab').hidden=view==='weight';$('#searchIn').placeholder=view==='money'?'Search… note, category, amount':view==='lists'?'Search lists and notes':'Search… task, party, number';
+  $('#cats').hidden=view==='money'||view==='lists'||view==='weight';$('#listsBtn').setAttribute('aria-pressed',view==='lists');$('#fab').hidden=view==='weight';$('#searchIn').placeholder=view==='money'?'Search… note, category, amount':view==='lists'?'Search lists and notes':'Search… task, party, number';
   if(view!=='money')area.innerHTML='';
   if(view==='lists'){renderLists(area);return}
   if(view==='weight'){renderWeight(area);return}
@@ -1562,7 +1562,7 @@ function renderWeight(root){const area=el('div','wview');root.appendChild(area);
     f.appendChild(ok);box.appendChild(f)}
   area.appendChild(box);
   // weigh-in
-  const wi=el('form','wform');const iw=el('input');iw.inputMode='decimal';iw.id='wIn';iw.placeholder='Today\'s weight (kg)';iw.setAttribute('aria-label','Weight in kg');iw.enterKeyHint='done';
+  const wi=el('form','wform');const iw=el('input');iw.inputMode='decimal';iw.id='wIn';iw.placeholder='Weight in kg';iw.setAttribute('aria-label','Weight in kg');iw.enterKeyHint='done';
   const idt=el('input');idt.type='date';idt.value=today;idt.max=today;idt.setAttribute('aria-label','Date');const sb=el('button','btn primary','Save');sb.type='submit';
   wi.append(iw,idt,sb);wi.onsubmit=e=>{e.preventDefault();const v=parseFloat(iw.value.replace(',','.'));if(!(v>20&&v<400)){toast('Enter your weight in kg, like 88.5');iw.focus();return}
     const k=idt.value||today;const prev=es.filter(x=>x.k<k).pop()||(k>=w.sdate?{k:w.sdate,v:w.start,st:1}:null);w.log=w.log||{};w.log[k]=Math.round(v*10)/10;touchD(w);saveW();render();
@@ -1595,7 +1595,6 @@ function renderWeight(root){const area=el('div','wview');root.appendChild(area);
     rev.forEach((e,i)=>{const r=el('div','wrow');const nx=rev[i+1]||(e.k>=w.sdate?{v:w.start}:null);const df=nx?e.v-nx.v:0;r.append(el('span',null,fmtD(e.k)),el('b',null,kg(e.v)),el('span','wd'+(df<0?' dn':df>0?' up':''),nx?(df<0?'−':df>0?'+':'±')+kg(Math.abs(df)):'—'));
       const x=el('button','x','×');x.type='button';x.setAttribute('aria-label','Delete '+fmtD(e.k));x.onclick=()=>{const old=w.log[e.k];delete w.log[e.k];touchD(w);saveW();render();toast('Deleted '+fmtD(e.k),'Undo',()=>{w.log[e.k]=old;touchD(w);saveW();render()})};
       r.appendChild(x);hb.appendChild(r)});area.appendChild(hb)}}
-$('#wtBtn').onclick=()=>{if(query){query='';$('#searchIn').value=''}setView(view==='weight'?'today':'weight')};
 
 /* ---------- Google / phone calendar ---------- */
 let calEvents=[],calFrom=0,calTo=0,calAt=0,calBusy=false;
